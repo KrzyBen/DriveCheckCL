@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16
+    container_name: drivecheck-db
+    env_file:
+      - ../server/backend-api/.env
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${PASSWORD}
+      POSTGRES_DB: ${DATABASE}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend-api:
+    build: ../server/backend-api
+    container_name: drivecheck-backend-api
+    env_file:
+      - ../server/backend-api/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+    volumes:
+      - storage:/storage
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 300s
+      timeout: 10s
+      retries: 3
+
+  # backend-ia y frontend se agregan más adelante,
+  # cuando el flujo app → backend-api → storage esté validado
+
+volumes:
+  db-data:
+  storage:
