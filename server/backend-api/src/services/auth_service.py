@@ -8,10 +8,6 @@ from helpers.bcrypt_helper import encrypt_password, compare_password
 
 
 async def login_service(db: Session, email: str, password: str):
-    """
-    Equivalente a loginService() en auth.service.js
-    Retorna [access_token, error]
-    """
     try:
         def create_error(field: str, message: str):
             return {"dataInfo": field, "message": message}
@@ -37,7 +33,15 @@ async def login_service(db: Session, email: str, password: str):
             algorithm="HS256"
         )
 
-        return [access_token, None]
+        user_data = {
+            "id": user.id,
+            "nombre_completo": user.nombre_completo,
+            "rut": user.rut,
+            "email": user.email,
+            "rol": user.rol,
+            "created_at": str(user.created_at),
+        }
+        return [{"token": access_token, "user": user_data}, None]
 
     except Exception as error:
         print(f"Error al iniciar sesión: {error}")
@@ -45,10 +49,6 @@ async def login_service(db: Session, email: str, password: str):
 
 
 async def register_service(db: Session, nombre_completo: str, rut: str, email: str, password: str):
-    """
-    Equivalente a registerService() en auth.service.js
-    Retorna [user_data, error]
-    """
     try:
         def create_error(field: str, message: str):
             return {"dataInfo": field, "message": message}

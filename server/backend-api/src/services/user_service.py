@@ -38,10 +38,6 @@ async def get_user_service(db: Session, id: int = None, rut: str = None, email: 
 
 
 async def get_users_service(db: Session):
-    """
-    Equivalente a getUsersService() en user.service.js
-    Retorna [users_data, error]
-    """
     try:
         users = db.query(User).all()
 

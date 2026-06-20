@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_SECRET: str
     COOKIE_KEY: str
     FRONTEND_URL: str = "http://localhost:5173"
+    STORAGE_PATH: str = "/data/reportes"
 
     class Config:
         env_file = ".env"

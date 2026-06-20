@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from config.configEnv import settings
+from entity.reporte_entity import Reporte, VideoReporte
 
 
 # URL de conexión a PostgreSQL
@@ -19,9 +20,9 @@ class Base(DeclarativeBase):
 
 
 def init_db():
-    """Inicializa la base de datos — equivalente a AppDataSource.initialize()"""
     try:
-        from entity.user_entity import User  # noqa: F401 — importar para registrar modelo
+        from entity.user_entity import User
+        from entity.reporte_entity import Reporte, VideoReporte 
         Base.metadata.create_all(bind=engine)
         print("=> Conexión exitosa a la base de datos!")
     except Exception as error:
@@ -30,7 +31,6 @@ def init_db():
 
 
 def get_db():
-    """Dependency de FastAPI para inyectar sesión DB en cada request"""
     db = SessionLocal()
     try:
         yield db
