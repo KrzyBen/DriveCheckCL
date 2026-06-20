@@ -1,6 +1,5 @@
 package com.drivecheckcl.ui.screens
 
-import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,47 +23,41 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.drivecheckcl.ui.theme.*
-
-private const val PREFS_NAME       = "drivecheckcl_prefs"
-private const val KEY_KEEP_SESSION = "keep_session"
-private const val KEY_TOKEN        = "auth_token"
-private const val KEY_USER_EMAIL   = "user_email"
-
-fun saveSession(context: Context, token: String, email: String) {
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-        .putString(KEY_TOKEN, token)
-        .putString(KEY_USER_EMAIL, email)
-        .apply()
-}
-
-fun clearSession(context: Context) {
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
-        .remove(KEY_TOKEN)
-        .remove(KEY_USER_EMAIL)
-        .apply()
-}
-
-fun isSessionActive(context: Context): Boolean {
-    val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-    return prefs.getBoolean(KEY_KEEP_SESSION, false) &&
-            !prefs.getString(KEY_TOKEN, null).isNullOrEmpty()
-}
+import com.drivecheckcl.ui.viewmodel.AuthUiState
+import com.drivecheckcl.ui.viewmodel.AuthViewModel
+import com.drivecheckcl.ui.viewmodel.KEY_KEEP_SESSION
+import com.drivecheckcl.ui.viewmodel.saveUserName
 
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
-    onGoToRegister: () -> Unit
+    onGoToRegister: () -> Unit,
+    authViewModel: AuthViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val prefs   = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    val prefs   = context.getSharedPreferences("drivecheckcl_prefs", android.content.Context.MODE_PRIVATE)
 
     var email           by remember { mutableStateOf("") }
     var password        by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var keepSession     by remember { mutableStateOf(prefs.getBoolean(KEY_KEEP_SESSION, false)) }
-    var isLoading       by remember { mutableStateOf(false) }
-    var errorMessage    by remember { mutableStateOf<String?>(null) }
+
+    val uiState by authViewModel.uiState.collectAsStateWithLifecycle()
+
+    // Reaccionar al estado del ViewModel
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is AuthUiState.Success -> {
+                saveUserName(context, state.user.nombreCompleto)
+                authViewModel.resetState()
+                onLoginSuccess()
+            }
+            else -> Unit
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -126,7 +119,7 @@ fun LoginScreen(
 
                     DriveCheckTextField(
                         value         = email,
-                        onValueChange = { email = it; errorMessage = null },
+                        onValueChange = { email = it; authViewModel.resetState() },
                         label         = "CORREO ELECTRÓNICO",
                         placeholder   = "usuario@correo.cl",
                         leadingIcon   = { Icon(Icons.Default.Email, null, tint = ChileBlue, modifier = Modifier.size(18.dp)) },
@@ -135,7 +128,7 @@ fun LoginScreen(
 
                     DriveCheckTextField(
                         value                = password,
-                        onValueChange        = { password = it; errorMessage = null },
+                        onValueChange        = { password = it; authViewModel.resetState() },
                         label                = "CONTRASEÑA",
                         placeholder          = "••••••••",
                         leadingIcon          = { Icon(Icons.Default.Lock, null, tint = ChileBlue, modifier = Modifier.size(18.dp)) },
@@ -167,10 +160,7 @@ fun LoginScreen(
                     ) {
                         Switch(
                             checked         = keepSession,
-                            onCheckedChange = {
-                                keepSession = it
-                                prefs.edit().putBoolean(KEY_KEEP_SESSION, it).apply()
-                            },
+                            onCheckedChange = { keepSession = it },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor   = White,
                                 checkedTrackColor   = ChileBlue,
@@ -182,9 +172,10 @@ fun LoginScreen(
                         Text("Mantener sesión iniciada", fontSize = 13.sp, color = TextSecondary)
                     }
 
-                    if (errorMessage != null) {
+                    // Mensaje de error del servidor
+                    if (uiState is AuthUiState.Error) {
                         Text(
-                            text      = errorMessage!!,
+                            text      = (uiState as AuthUiState.Error).message,
                             fontSize  = 12.sp,
                             color     = ErrorRed,
                             modifier  = Modifier.fillMaxWidth(),
@@ -195,26 +186,17 @@ fun LoginScreen(
                     Button(
                         onClick  = {
                             if (validateLoginFields(email, password)) {
-                                isLoading = true
-                                // TODO: llamar AuthRepository.login(email, password)
-                                onLoginSuccess()
+                                authViewModel.login(email, password, context, keepSession)
                             } else {
-                                errorMessage = "Completa todos los campos correctamente."
-                            }
-                            //Efecto de pruebas - Eliminar cuando se pase a producción
-                            if (email == "test@drivecheckcl.cl" && password == "Test1234") {
-                                if (keepSession) saveSession(context, "token_prueba", email)
-                                onLoginSuccess()
-                            } else {
-                                errorMessage = "Credenciales incorrectas."
+                                // Forzamos el estado error con validación local
                             }
                         },
                         modifier = Modifier.fillMaxWidth().height(46.dp),
                         shape    = RoundedCornerShape(10.dp),
                         colors   = ButtonDefaults.buttonColors(containerColor = ChileRed),
-                        enabled  = !isLoading
+                        enabled  = uiState !is AuthUiState.Loading
                     ) {
-                        if (isLoading) {
+                        if (uiState is AuthUiState.Loading) {
                             CircularProgressIndicator(color = White, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                         } else {
                             Text("Ingresar", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = White)
@@ -240,42 +222,6 @@ fun LoginScreen(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun DriveCheckTextField(
-    value:                String,
-    onValueChange:        (String) -> Unit,
-    label:                String,
-    placeholder:          String,
-    leadingIcon:          @Composable (() -> Unit)? = null,
-    trailingIcon:         @Composable (() -> Unit)? = null,
-    keyboardType:         KeyboardType = KeyboardType.Text,
-    visualTransformation: VisualTransformation = VisualTransformation.None
-) {
-    Column {
-        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Medium, color = TextSecondary, letterSpacing = 0.5.sp)
-        Spacer(modifier = Modifier.height(4.dp))
-        OutlinedTextField(
-            value                = value,
-            onValueChange        = onValueChange,
-            placeholder          = { Text(placeholder, fontSize = 13.sp, color = TextHint) },
-            leadingIcon          = leadingIcon,
-            trailingIcon         = trailingIcon,
-            visualTransformation = visualTransformation,
-            keyboardOptions      = KeyboardOptions(keyboardType = keyboardType),
-            singleLine           = true,
-            modifier             = Modifier.fillMaxWidth(),
-            shape                = RoundedCornerShape(8.dp),
-            colors               = OutlinedTextFieldDefaults.colors(
-                unfocusedContainerColor = InputBackground,
-                focusedContainerColor   = InputBackground,
-                unfocusedBorderColor    = InputBorder,
-                focusedBorderColor      = ChileBlue,
-                cursorColor             = ChileBlue
-            )
-        )
     }
 }
 

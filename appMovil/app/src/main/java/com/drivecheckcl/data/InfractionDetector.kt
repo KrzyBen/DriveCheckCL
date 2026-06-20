@@ -1,4 +1,4 @@
-package com.drivecheckcl.data.assets
+package com.drivecheckcl.data
 
 // Resultado de una detección
 data class DetectionResult(
