@@ -1,11 +1,12 @@
 import os
 import shutil
-from config.configEnv import settings
+
+STORAGE_ROOT = "/storage"
 
 
 def get_storage_root() -> str:
-    os.makedirs(settings.STORAGE_PATH, exist_ok=True)
-    return settings.STORAGE_PATH
+    os.makedirs(STORAGE_ROOT, exist_ok=True)
+    return STORAGE_ROOT
 
 
 def get_reporte_dir(usuario_id: int, reporte_id: int) -> str:
@@ -19,10 +20,6 @@ def get_reporte_dir(usuario_id: int, reporte_id: int) -> str:
 
 
 def guardar_video(usuario_id: int, reporte_id: int, orden: int, archivo) -> str:
-    """
-    Guarda un UploadFile en disco y retorna el path RELATIVO
-    (el que se guarda en la DB), no el absoluto.
-    """
     dir_path = get_reporte_dir(usuario_id, reporte_id)
     nombre_archivo = f"video_{orden}.mp4"
     ruta_absoluta = os.path.join(dir_path, nombre_archivo)
