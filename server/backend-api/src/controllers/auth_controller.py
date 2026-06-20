@@ -12,7 +12,7 @@ async def login(body: LoginValidation, db: Session = Depends(get_db)):
         access_token, error = await login_service(db, body.email, body.password)
         if error:
             return handle_error_client(400, "Error iniciando sesión", error)
-        return handle_success(200, "Inicio de sesión exitoso", {"token": access_token})
+        return handle_success(200, "Inicio de sesión exitoso", access_token)
     except Exception as error:
         return handle_error_server(500, str(error))
 
