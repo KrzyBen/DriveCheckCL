@@ -5,22 +5,30 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import com.drivecheckcl.data.local.LocalStorageManager
 import com.drivecheckcl.ui.screens.*
 import com.drivecheckcl.ui.theme.DriveCheckTheme
+import com.drivecheckcl.ui.viewmodel.getSavedUserName
+import com.drivecheckcl.ui.viewmodel.isSessionActive
 
 enum class Screen {
     LOGIN,
     REGISTER,
     HOME,
     MIS_INFORMES,
-    RANKING,
-    MI_PROGRESO,
+    CREAR_INFORME,
+    MIS_ARCHIVOS,
+    DASHCAM,
     CONFIGURACION
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Crea estructura de carpetas al arrancar
+        LocalStorageManager.inicializarEstructura(this)
+
         setContent {
             DriveCheckTheme {
                 DriveCheckApp()
@@ -46,24 +54,29 @@ fun DriveCheckApp() {
             onGoToLogin       = { currentScreen = Screen.LOGIN }
         )
         Screen.HOME -> HomeScreen(
-            onGoToInformes = { currentScreen = Screen.MIS_INFORMES },
-            onGoToRanking  = { currentScreen = Screen.RANKING },
-            onGoToProgreso = { currentScreen = Screen.MI_PROGRESO },
-            onGoToConfig   = { currentScreen = Screen.CONFIGURACION },
-            onGoToDashcam  = { }
+            userName          = getSavedUserName(context),
+            onGoToInformes    = { currentScreen = Screen.MIS_INFORMES },
+            onGoToConfig      = { currentScreen = Screen.CONFIGURACION },
+            onGoToDashcam     = { currentScreen = Screen.DASHCAM },
+            onGoToMisArchivos = { currentScreen = Screen.MIS_ARCHIVOS }
         )
         Screen.MIS_INFORMES -> MisInformesScreen(
-            onBack = { currentScreen = Screen.HOME }
+            onBack = { currentScreen = Screen.HOME },
+            onCrearInforme = { currentScreen = Screen.CREAR_INFORME }
         )
-        Screen.RANKING -> RankingScreen(
-            onBack = { currentScreen = Screen.HOME }
+        Screen.CREAR_INFORME -> CrearInformeScreen(
+            onBack    = { currentScreen = Screen.MIS_INFORMES },
+            onSuccess = { currentScreen = Screen.MIS_INFORMES }
         )
-        Screen.MI_PROGRESO -> MiProgresoScreen(
+        Screen.MIS_ARCHIVOS -> MisArchivosScreen(
             onBack = { currentScreen = Screen.HOME }
         )
         Screen.CONFIGURACION -> ConfiguracionScreen(
             onBack   = { currentScreen = Screen.HOME },
             onLogout = { currentScreen = Screen.LOGIN }
+        )
+        Screen.DASHCAM -> DashcamScreen(
+            onBack = { currentScreen = Screen.HOME }
         )
     }
 }

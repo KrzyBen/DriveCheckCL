@@ -18,15 +18,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.drivecheckcl.ui.theme.*
 
+// ── Firma de la función — agregar parámetro ───────────────────────────────────
 @Composable
 fun HomeScreen(
-    onGoToInformes:     () -> Unit,
-    onGoToRanking:      () -> Unit,
-    onGoToProgreso:     () -> Unit,
-    onGoToConfig:       () -> Unit,
-    onGoToDashcam:      () -> Unit
+    userName:          String = "Usuario",
+    onGoToInformes:    () -> Unit,
+    onGoToConfig:      () -> Unit,
+    onGoToDashcam:     () -> Unit,
+    onGoToMisArchivos: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
+    val greeting = remember {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        when {
+            hour < 12 -> "Buenos días,"
+            hour < 19 -> "Buenas tardes,"
+            else      -> "Buenas noches,"
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(BackgroundGray)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -44,8 +53,8 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Buenos días,", fontSize = 13.sp, color = White.copy(alpha = 0.7f))
-                        Text("Juan Pérez", fontSize = 18.sp, fontWeight = FontWeight.Medium, color = White)
+                        Text(greeting, fontSize = 13.sp, color = White.copy(alpha = 0.7f))
+                        Text(userName, fontSize = 18.sp, fontWeight = FontWeight.Medium, color = White)
                     }
                     Box(
                         modifier = Modifier
@@ -59,7 +68,7 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Tarjeta score
+                // Tarjeta score — mock hasta conectar backend de reportes
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -77,22 +86,13 @@ fun HomeScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("78", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = White)
+                            Text("--", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = White)
                             Text("/100", fontSize = 9.sp, color = White.copy(alpha = 0.6f))
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Puntuación de conducción", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = White)
-                        Text("Basado en tus últimas 5 revisiones", fontSize = 11.sp, color = White.copy(alpha = 0.6f))
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(White.copy(alpha = 0.18f))
-                                .padding(horizontal = 10.dp, vertical = 3.dp)
-                        ) {
-                            Text("🏆  Puesto #24 nacional", fontSize = 11.sp, color = White)
-                        }
+                        Text("Graba tu primer trayecto para ver tu puntaje", fontSize = 11.sp, color = White.copy(alpha = 0.6f))
                     }
                 }
             }
@@ -112,7 +112,7 @@ fun HomeScreen(
                     .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Botón Dashcam
+                // Botón Dashcam principal
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -150,72 +150,29 @@ fun HomeScreen(
                         icon        = Icons.Default.Assignment,
                         iconBgColor = ChileRed,
                         title       = "Mis informes",
-                        subtitle    = "Faltas detectadas",
+                        subtitle    = "Reportes de trayectos",
                         onClick     = onGoToInformes
                     )
                     ActionCard(
                         modifier    = Modifier.weight(1f),
-                        icon        = Icons.Default.Leaderboard,
-                        iconBgColor = SuccessGreen,
-                        title       = "Ranking",
-                        subtitle    = "Tabla conductores",
-                        onClick     = onGoToRanking
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ActionCard(
-                        modifier    = Modifier.weight(1f),
-                        icon        = Icons.Default.Timeline,
+                        icon        = Icons.Default.FolderOpen,
                         iconBgColor = ChileBlue,
-                        title       = "Mi progreso",
-                        subtitle    = "Evolución en el tiempo",
-                        onClick     = onGoToProgreso
+                        title       = "Mis archivos",
+                        subtitle    = "Videos guardados",
+                        onClick     = onGoToMisArchivos
                     )
-                    ActionCard(
-                        modifier    = Modifier.weight(1f),
-                        icon        = Icons.Default.Settings,
-                        iconBgColor = TextSecondary,
-                        title       = "Configuración",
-                        subtitle    = "Cuenta y app",
-                        onClick     = onGoToConfig
-                    )
-                }
-
-                // Último trayecto
-                SectionLabel("ÚLTIMO TRAYECTO")
-                Card(
-                    modifier  = Modifier.fillMaxWidth(),
-                    shape     = RoundedCornerShape(12.dp),
-                    colors    = CardDefaults.cardColors(containerColor = SurfaceWhite),
-                    elevation = CardDefaults.cardElevation(0.dp)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("Revisión del 12 may, 08:34", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-                            Text("78/100", fontSize = 12.sp, color = WarningAmber, fontWeight = FontWeight.Medium)
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        InfraccionRow(color = ChileRed,      nombre = "Exceso de velocidad",   ley = "Art. 144 — Ley 18.290")
-                        InfraccionRow(color = WarningAmber,  nombre = "No respetar distancia", ley = "Art. 150 — Ley 18.290")
-                        InfraccionRow(color = SuccessGreen,  nombre = "Uso de cinturón",       ley = "Correcto")
-                    }
                 }
             }
         }
 
         // ── Bottom Nav ────────────────────────────────────────────────────────
         BottomNav(
-            selected  = selectedTab,
-            onSelect  = { selectedTab = it },
-            modifier  = Modifier.align(Alignment.BottomCenter),
-            onDashcam = onGoToDashcam,
-            onRanking = onGoToRanking
+            selected     = selectedTab,
+            onSelect     = { selectedTab = it },
+            modifier     = Modifier.align(Alignment.BottomCenter),
+            onDashcam    = onGoToDashcam,
+            onGoToConfig = onGoToConfig,
+            onGoToMisArchivos = onGoToMisArchivos
         )
     }
 }
@@ -284,11 +241,12 @@ fun InfraccionRow(color: androidx.compose.ui.graphics.Color, nombre: String, ley
 
 @Composable
 fun BottomNav(
-    selected:  Int,
-    onSelect:  (Int) -> Unit,
-    modifier:  Modifier,
-    onDashcam: () -> Unit,
-    onRanking: () -> Unit
+    selected:     Int,
+    onSelect:     (Int) -> Unit,
+    modifier:     Modifier,
+    onDashcam:    () -> Unit,
+    onGoToConfig: () -> Unit,
+    onGoToMisArchivos: () -> Unit
 ) {
     Row(
         modifier = modifier
@@ -297,10 +255,10 @@ fun BottomNav(
             .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceAround
     ) {
-        BottomNavItem(icon = Icons.Default.Home,        label = "Inicio",   selected = selected == 0, onClick = { onSelect(0) })
-        BottomNavItem(icon = Icons.Default.Videocam,    label = "Dashcam",  selected = selected == 1, onClick = { onSelect(1); onDashcam() })
-        BottomNavItem(icon = Icons.Default.Leaderboard, label = "Ranking",  selected = selected == 2, onClick = { onSelect(2); onRanking() })
-        BottomNavItem(icon = Icons.Default.Person,      label = "Perfil",   selected = selected == 3, onClick = { onSelect(3) })
+        BottomNavItem(icon = Icons.Default.Home,     label = "Inicio",  selected = selected == 0, onClick = { onSelect(0) })
+        BottomNavItem(icon = Icons.Default.Videocam, label = "Dashcam", selected = selected == 1, onClick = { onSelect(1); onDashcam() })
+        BottomNavItem(icon = Icons.Default.Folder,   label = "Archivos",selected = selected == 2, onClick = { onSelect(2); onGoToMisArchivos() })
+        BottomNavItem(icon = Icons.Default.Person,   label = "Perfil",  selected = selected == 3, onClick = { onSelect(3); onGoToConfig() })
     }
 }
 
