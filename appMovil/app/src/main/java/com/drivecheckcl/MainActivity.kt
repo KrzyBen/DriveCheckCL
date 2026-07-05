@@ -1,11 +1,17 @@
 package com.drivecheckcl
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import com.drivecheckcl.data.local.LocalStorageManager
+import com.drivecheckcl.data.network.RetrofitClient
 import com.drivecheckcl.ui.screens.*
 import com.drivecheckcl.ui.theme.DriveCheckTheme
 import com.drivecheckcl.ui.viewmodel.getSavedUserName
@@ -23,17 +29,40 @@ enum class Screen {
 }
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Crea estructura de carpetas al arrancar
-        LocalStorageManager.inicializarEstructura(this)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+            !Environment.isExternalStorageManager()
+        ) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                data = Uri.parse("package:${packageName}")
+            }
+            startActivity(intent)
+        } else {
+            inicializar()
+        }
 
         setContent {
             DriveCheckTheme {
                 DriveCheckApp()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+            Environment.isExternalStorageManager()
+        ) {
+            inicializar()
+        }
+    }
+
+    private fun inicializar() {
+        LocalStorageManager.inicializarEstructura(this)
+        RetrofitClient.init(this)
     }
 }
 
@@ -61,7 +90,7 @@ fun DriveCheckApp() {
             onGoToMisArchivos = { currentScreen = Screen.MIS_ARCHIVOS }
         )
         Screen.MIS_INFORMES -> MisInformesScreen(
-            onBack = { currentScreen = Screen.HOME },
+            onBack         = { currentScreen = Screen.HOME },
             onCrearInforme = { currentScreen = Screen.CREAR_INFORME }
         )
         Screen.CREAR_INFORME -> CrearInformeScreen(

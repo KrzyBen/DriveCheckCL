@@ -4,11 +4,11 @@ import com.google.gson.annotations.SerializedName
 
 // ── Estado del informe ────────────────────────────────────────────────────────
 enum class EstadoInforme {
-    ENVIADO,
-    RECIBIDO,
-    ANALIZANDO,
-    VALIDANDO,
-    RESULTADOS
+    @SerializedName("enviado")    ENVIADO,
+    @SerializedName("recibido")   RECIBIDO,
+    @SerializedName("analizando") ANALIZANDO,
+    @SerializedName("validando")  VALIDANDO,
+    @SerializedName("resultados") RESULTADOS
 }
 
 fun EstadoInforme.etiqueta(): String = when (this) {
@@ -19,33 +19,42 @@ fun EstadoInforme.etiqueta(): String = when (this) {
     EstadoInforme.RESULTADOS -> "Resultados"
 }
 
-// ── Informe local (guardado en SharedPreferences mientras no hay backend) ─────
+// ── Modelo usado por la UI (mapeado desde la respuesta del servidor) ──────────
 data class InformeLocal(
-    val id: String,                    // timestamp "yyyyMMdd_HHmmss"
-    val titulo: String,                // "Reporte DD/MM/YYYY HH:mm"
+    val id: Int,
+    val titulo: String,
     val comentario: String,
-    val videoPaths: List<String>,      // rutas en filesDir/reportes/reporte_{id}/
+    val videoPaths: List<String>,
     val fechaCreacion: Long,
     val estado: EstadoInforme,
-    val numeracion: Int,               // posición en la lista del usuario
+    val numeracion: Int,
     val pdfDisponible: Boolean = false
 )
 
-// ── Request para el servidor (futuro) ─────────────────────────────────────────
-data class CrearInformeRequest(
-    val titulo: String,
-    val comentario: String
+// ── Video dentro de un reporte (respuesta del servidor) ───────────────────────
+data class VideoReporteResponse(
+    val id: Int,
+    val orden: Int,
+    val path: String
 )
 
-// ── Response del servidor (futuro) ────────────────────────────────────────────
+// ── Respuesta completa de un reporte (igual para crear y listar) ──────────────
 data class InformeResponse(
-    val id: String,
+    val id: Int,
     val titulo: String,
-    val comentario: String,
-    @SerializedName("fecha_creacion")
-    val fechaCreacion: String,
-    val estado: String,
-    val numeracion: Int,
+    val comentario: String?,
+    val estado: EstadoInforme,
     @SerializedName("pdf_disponible")
-    val pdfDisponible: Boolean
+    val pdfDisponible: Boolean,
+    @SerializedName("created_at")
+    val createdAt: String,
+    @SerializedName("updated_at")
+    val updatedAt: String,
+    val videos: List<VideoReporteResponse>
+)
+
+// ── Conteo de reportes (para validar límite antes de crear) ───────────────────
+data class ConteoReportesResponse(
+    val total: Int,
+    val limite: Int
 )

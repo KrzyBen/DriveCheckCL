@@ -5,16 +5,19 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,6 +28,7 @@ import com.drivecheckcl.ui.theme.*
 import com.drivecheckcl.ui.viewmodel.DashcamViewModel
 import com.drivecheckcl.ui.viewmodel.InformeUiState
 import com.drivecheckcl.ui.viewmodel.InformeViewModel
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -44,7 +48,7 @@ fun CrearInformeScreen(
     var videosSeleccionados by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val tituloAuto = remember {
-        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("es", "CL"))
+        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.Builder().setLanguage("es").setRegion("CL").build())
         "Reporte ${sdf.format(Date())}"
     }
 
@@ -76,7 +80,7 @@ fun CrearInformeScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Default.ArrowBack, null, tint = White,
+                    Icons.AutoMirrored.Filled.ArrowBack, null, tint = White,
                     modifier = Modifier.size(24.dp).clickable {
                         if (!isLoading) onBack()
                     }
@@ -167,11 +171,11 @@ fun CrearInformeScreen(
                         colors   = TextFieldDefaults.colors(
                             unfocusedContainerColor = SurfaceWhite,
                             focusedContainerColor   = SurfaceWhite,
-                            unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                            focusedIndicatorColor   = androidx.compose.ui.graphics.Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                            focusedIndicatorColor   = Color.Transparent,
                             cursorColor             = ChileBlue
                         ),
-                        textStyle = androidx.compose.ui.text.TextStyle(
+                        textStyle = TextStyle(
                             fontSize = 13.sp,
                             color    = TextPrimary
                         )
@@ -274,6 +278,7 @@ fun CrearInformeScreen(
                     onClick  = {
                         informeViewModel.crearInforme(
                             context    = context,
+                            titulo     = tituloAuto,
                             videoPaths = videosSeleccionados.toList(),
                             comentario = comentario,
                             onSuccess  = onSuccess
@@ -294,7 +299,7 @@ fun CrearInformeScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Icon(Icons.Default.Send, null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.AutoMirrored.Filled.Send, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Enviar informe", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     }
@@ -319,8 +324,8 @@ fun VideoSeleccionableRow(
             .removeSuffix(".mp4")
             .let { raw ->
                 runCatching {
-                    val sdfIn  = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault())
-                    val sdfOut = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("es", "CL"))
+                    val sdfIn  = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                    val sdfOut = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.Builder().setLanguage("es").setRegion("CL").build())
                     sdfOut.format(sdfIn.parse(raw)!!)
                 }.getOrDefault(video.nombre)
             }
@@ -339,7 +344,7 @@ fun VideoSeleccionableRow(
     }
 
     val tamano = remember(video.rutaArchivo) {
-        val bytes = java.io.File(video.rutaArchivo).length()
+        val bytes = File(video.rutaArchivo).length()
         "${"%.1f".format(bytes / (1024f * 1024f))} MB"
     }
 
@@ -349,7 +354,7 @@ fun VideoSeleccionableRow(
             .clickable(enabled = habilitado) { onToggle() }
             .background(
                 if (seleccionado) ChileBlue.copy(alpha = 0.04f)
-                else androidx.compose.ui.graphics.Color.Transparent
+                else Color.Transparent
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment     = Alignment.CenterVertically,
@@ -360,7 +365,7 @@ fun VideoSeleccionableRow(
             modifier = Modifier
                 .size(20.dp)
                 .clip(RoundedCornerShape(4.dp))
-                .background(if (seleccionado) ChileBlue else androidx.compose.ui.graphics.Color.Transparent)
+                .background(if (seleccionado) ChileBlue else Color.Transparent)
                 .border(
                     width = 1.5.dp,
                     color = if (seleccionado) ChileBlue

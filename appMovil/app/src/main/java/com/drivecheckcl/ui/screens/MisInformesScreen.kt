@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -14,7 +15,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,13 +32,12 @@ fun MisInformesScreen(
     onCrearInforme:  () -> Unit,
     viewModel:       InformeViewModel = viewModel()
 ) {
-    val context  = LocalContext.current
     val informes by viewModel.informes.collectAsStateWithLifecycle()
 
-    var filtroActivo by remember { mutableStateOf(0) }
+    var filtroActivo by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
-        viewModel.cargarInformes(context)
+        viewModel.cargarInformes()
     }
 
     // Contadores para resumen
@@ -57,7 +56,7 @@ fun MisInformesScreen(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Default.ArrowBack, null, tint = White,
+                    Icons.AutoMirrored.Filled.ArrowBack, null, tint = White,
                     modifier = Modifier.size(24.dp).clickable { onBack() }
                 )
                 Spacer(modifier = Modifier.width(12.dp))
@@ -152,7 +151,7 @@ fun MisInformesScreen(
                     items(informes, key = { it.id }) { informe ->
                         InformeCard(
                             informe          = informe,
-                            onActualizar     = { viewModel.actualizarEstado(context, informe.id) },
+                            onActualizar     = { viewModel.cargarInformes() },
                             onDescargarPdf   = { /* futuro */ }
                         )
                     }
@@ -305,4 +304,42 @@ fun estadoColores(estado: EstadoInforme): Pair<Color, Color> = when (estado) {
     EstadoInforme.ANALIZANDO -> Pair(Color(0xFF6D28D9), Color(0xFF6D28D9).copy(alpha = 0.1f))
     EstadoInforme.VALIDANDO  -> Pair(Color(0xFF1D4ED8), Color(0xFF1D4ED8).copy(alpha = 0.1f))
     EstadoInforme.RESULTADOS -> Pair(SuccessGreen, SuccessGreen.copy(alpha = 0.12f))
+}
+
+// ── Componentes auxiliares (FilterPill, ResumenCard) ───────────────────────────
+
+@Composable
+fun FilterPill(label: String, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (active) White else White.copy(alpha = 0.15f))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+    ) {
+        Text(
+            text       = label,
+            fontSize   = 12.sp,
+            color      = if (active) ChileBlue else White.copy(alpha = 0.8f),
+            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+fun ResumenCard(modifier: Modifier, valor: String, label: String, color: Color) {
+    Card(
+        modifier  = modifier,
+        shape     = RoundedCornerShape(10.dp),
+        colors    = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(valor, fontSize = 22.sp, fontWeight = FontWeight.Medium, color = color)
+            Text(label, fontSize = 9.sp,  color = TextSecondary, letterSpacing = 0.3.sp)
+        }
+    }
 }
