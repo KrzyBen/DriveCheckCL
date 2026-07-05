@@ -66,7 +66,7 @@ async def register_service(db: Session, nombre_completo: str, rut: str, email: s
             rut=rut,
             email=email,
             password=await encrypt_password(password),
-            rol="usuario",
+            rol="conductor",
         )
 
         db.add(new_user)
@@ -86,5 +86,44 @@ async def register_service(db: Session, nombre_completo: str, rut: str, email: s
 
     except Exception as error:
         print(f"Error al registrar usuario: {error}")
+        db.rollback()
+        return [None, "Error interno del servidor"]
+
+async def create_user_admin_service(db: Session, nombre_completo: str, rut: str, email: str, password: str, rol: str = "conductor"):
+    try:
+        def create_error(field: str, message: str):
+            return {"dataInfo": field, "message": message}
+
+        if rol not in ("administrador", "validador", "conductor"):
+            return [None, create_error("rol", "Rol inválido")]
+
+        if db.query(User).filter(User.email == email).first():
+            return [None, create_error("email", "Correo electrónico en uso")]
+
+        if db.query(User).filter(User.rut == rut).first():
+            return [None, create_error("rut", "RUT ya asociado a una cuenta")]
+
+        new_user = User(
+            nombre_completo=nombre_completo,
+            rut=rut,
+            email=email,
+            password=await encrypt_password(password),
+            rol=rol,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        return [{
+            "id": new_user.id,
+            "nombre_completo": new_user.nombre_completo,
+            "rut": new_user.rut,
+            "email": new_user.email,
+            "rol": new_user.rol,
+            "created_at": str(new_user.created_at),
+        }, None]
+
+    except Exception as error:
+        print(f"Error al crear usuario (admin): {error}")
         db.rollback()
         return [None, "Error interno del servidor"]

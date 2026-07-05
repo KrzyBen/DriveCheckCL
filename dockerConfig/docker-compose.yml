@@ -42,6 +42,20 @@ services:
   # backend-ia y frontend se agregan más adelante,
   # cuando el flujo app → backend-api → storage esté validado
 
+  frontend:
+    build:
+      context: ../server/frontend
+    container_name: drivecheck-frontend
+    environment:
+      VITE_BASE_URL: http://localhost:8000
+    volumes:
+      - ../server/frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend-api
+
 volumes:
   db-data:
   storage:

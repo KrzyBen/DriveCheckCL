@@ -33,7 +33,7 @@ async def create_users():
                 "rut": "20.630.735-8",
                 "email": "usuario@drivecheckcl.cl",
                 "password": await encrypt_password("User1234"),
-                "rol": "usuario",
+                "rol": "conductor",
             },
         ]
 

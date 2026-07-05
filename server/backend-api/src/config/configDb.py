@@ -1,7 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 from config.configEnv import settings
-from entity.reporte_entity import Reporte, VideoReporte
 
 
 # URL de conexión a PostgreSQL
