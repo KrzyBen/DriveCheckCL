@@ -1,0 +1,48 @@
+.table-container {
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tabulator {
+  font-size: 13px;
+  border: none;
+  background: var(--surface-2);
+}
+.tabulator .tabulator-header {
+  background: var(--surface-1);
+  border-bottom: 0.5px solid var(--border);
+}
+.tabulator .tabulator-col {
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.tabulator .tabulator-row {
+  border-top: 0.5px solid var(--border);
+}
+.tabulator .tabulator-row.tabulator-selected {
+  background: var(--cl-blue-100);
+}
+.tabulator .tabulator-footer {
+  background: var(--surface-1);
+  border-top: 0.5px solid var(--border);
+}
+.tabulator .tabulator-page.active {
+  background: var(--cl-blue);
+  color: #fff;
+}
+
+.table-action-btn {
+  border: 0.5px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-right: 4px;
+  font-size: 13px;
+}
