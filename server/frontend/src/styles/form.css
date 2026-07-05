@@ -1,0 +1,18 @@
+.form { display: flex; flex-direction: column; gap: 1rem; max-width: 360px; width: 100%; }
+.form h1 { font-size: 18px; text-align: center; color: var(--cl-blue-800); margin: 0 0 0.5rem; }
+.container_inputs { display: flex; flex-direction: column; gap: 4px; }
+.container_inputs label { font-size: 12px; color: var(--text-secondary); }
+.container_inputs input,
+.container_inputs select,
+.container_inputs textarea {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  height: 38px; padding: 0 10px; font-size: 14px;
+}
+.container_inputs textarea { height: auto; padding: 8px 10px; }
+.error-message { font-size: 12px; color: var(--cl-red); min-height: 14px; }
+.error-message:not(.visible) { visibility: hidden; }
+.form button[type='submit'] {
+  background: var(--cl-blue); color: #fff; border: none; border-radius: var(--radius);
+  height: 40px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 6px;
+}
+.toggle-password-icon { display: none; } /* sin iconos de ojo por ahora, ver nota abajo */
