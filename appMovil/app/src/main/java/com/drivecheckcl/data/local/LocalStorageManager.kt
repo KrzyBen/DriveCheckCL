@@ -6,6 +6,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.os.Environment
 
 // ── Modelo de carpeta de reporte local ───────────────────────────────────────
 data class ReporteLocal(
@@ -29,14 +30,19 @@ object LocalStorageManager {
 
     // ── Directorios base ──────────────────────────────────────────────────────
 
+    private fun getRootDir(): File =
+        File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            "DriveCheckCL"
+        )
     fun getVideosDir(context: Context): File =
-        File(context.filesDir, DIR_VIDEOS)
+        File(getRootDir(), DIR_VIDEOS)
 
     fun getReportesDir(context: Context): File =
-        File(context.filesDir, DIR_REPORTES)
+        File(getRootDir(), DIR_REPORTES)
 
     fun getReporteDir(context: Context, reporteId: String): File =
-        File(getReportesDir(context), "reporte_$reporteId")
+        File(getRootDir(), "reportes/reporte_$reporteId")
 
     // ── Videos ───────────────────────────────────────────────────────────────
 

@@ -1,15 +1,15 @@
 package com.drivecheckcl.ui.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.drivecheckcl.data.model.EstadoInforme
 import com.drivecheckcl.data.model.InformeLocal
-import com.drivecheckcl.data.repository.InformeRepository
+import com.drivecheckcl.data.repository.ReporteRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.content.Context
+import com.drivecheckcl.data.local.LocalStorageManager
 
 sealed class InformeUiState {
     object Idle    : InformeUiState()
@@ -26,42 +26,53 @@ class InformeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow<InformeUiState>(InformeUiState.Idle)
     val uiState: StateFlow<InformeUiState> = _uiState.asStateFlow()
 
-    fun cargarInformes(context: Context) {
-        _informes.value = InformeRepository.listarInformes(context)
+    fun cargarInformes() {
+        viewModelScope.launch {
+            val (informes, error) = ReporteRepository.misReportes()
+            if (informes != null) {
+                _informes.value = informes
+            } else if (error != null) {
+                _uiState.value = InformeUiState.Error(error)
+            }
+        }
     }
 
     fun crearInforme(
         context:    Context,
+        titulo:     String,
         videoPaths: List<String>,
         comentario: String,
         onSuccess:  () -> Unit
     ) {
         viewModelScope.launch {
             _uiState.value = InformeUiState.Loading
-            try {
-                InformeRepository.crearInformeLocal(context, videoPaths, comentario)
-                cargarInformes(context)
+            val (resultado, error) = ReporteRepository.crearReporte(titulo, comentario, videoPaths)
+
+            if (resultado != null) {
+                // Mover videos al directorio del reporte local
+                val reporteId = resultado.id.toString()
+                videoPaths.forEach { path ->
+                    LocalStorageManager.moverVideoAReporte(context, path, reporteId)
+                }
+
+                cargarInformes()
                 _uiState.value = InformeUiState.Success
                 onSuccess()
-            } catch (e: Exception) {
-                _uiState.value = InformeUiState.Error("Error al crear el informe")
+            } else {
+                _uiState.value = InformeUiState.Error(error ?: "Error al crear el informe")
             }
         }
     }
 
-    fun actualizarEstado(context: Context, informeId: String) {
-        // Por ahora cicla al siguiente estado — reemplazar con llamada al backend
-        val informe = _informes.value.find { it.id == informeId } ?: return
-        val nuevoEstado = when (informe.estado) {
-            EstadoInforme.ENVIADO    -> EstadoInforme.RECIBIDO
-            EstadoInforme.RECIBIDO   -> EstadoInforme.ANALIZANDO
-            EstadoInforme.ANALIZANDO -> EstadoInforme.VALIDANDO
-            EstadoInforme.VALIDANDO  -> EstadoInforme.RESULTADOS
-            EstadoInforme.RESULTADOS -> EstadoInforme.RESULTADOS
+    fun eliminarInforme(id: Int) {
+        viewModelScope.launch {
+            val (exito, error) = ReporteRepository.eliminarReporte(id)
+            if (exito) {
+                cargarInformes()
+            } else if (error != null) {
+                _uiState.value = InformeUiState.Error(error)
+            }
         }
-        val pdfDisponible = nuevoEstado == EstadoInforme.RESULTADOS
-        InformeRepository.actualizarEstado(context, informeId, nuevoEstado, pdfDisponible)
-        cargarInformes(context)
     }
 
     fun resetState() {
