@@ -1,9 +1,21 @@
 from sqlalchemy.orm import Session, joinedload
 
-from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte
+from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte, Infraccion
 from helpers.storage_helper import guardar_video, eliminar_carpeta_reporte
+from datetime import datetime, timezone, timedelta
+from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
 
 MAX_REPORTES_POR_USUARIO = 10
+
+DIAS_MINIMOS_ELIMINACION = 60
+
+TRANSICIONES_VALIDAS = {
+    EstadoReporte.enviado:    {EstadoReporte.recibido, EstadoReporte.aprobado, EstadoReporte.rechazado},
+    EstadoReporte.recibido:   {EstadoReporte.analizando, EstadoReporte.aprobado, EstadoReporte.rechazado},
+    EstadoReporte.analizando: {EstadoReporte.aprobado, EstadoReporte.rechazado},
+    EstadoReporte.aprobado:   set(),
+    EstadoReporte.rechazado:  set(),
+}
 
 
 async def contar_reportes_service(db: Session, usuario_id: int):
@@ -116,10 +128,15 @@ async def actualizar_estado_service(db: Session, usuario_id: int, reporte_id: in
         if nuevo_estado not in EstadoReporte.__members__:
             return [None, "Estado inválido"]
 
-        reporte.estado = EstadoReporte[nuevo_estado]
-        if pdf_path:
-            reporte.pdf_path = pdf_path
+        nuevo = EstadoReporte[nuevo_estado]
 
+        if nuevo in (EstadoReporte.aprobado, EstadoReporte.rechazado):
+            return [None, "Usa los endpoints de validar/rechazar para este cambio de estado"]
+
+        if not puede_transicionar(reporte.estado, nuevo):
+            return [None, f"No se puede pasar de '{reporte.estado.value}' a '{nuevo.value}'"]
+
+        reporte.estado = nuevo
         db.commit()
         db.refresh(reporte)
 
@@ -154,19 +171,148 @@ async def eliminar_reporte_service(db: Session, usuario_id: int, reporte_id: int
         return [None, "Error interno del servidor"]
 
 
-# ── Helper de serialización ───────────────────────────────────────────────────
+def puede_transicionar(actual: EstadoReporte, nuevo: EstadoReporte) -> bool:
+    return nuevo in TRANSICIONES_VALIDAS.get(actual, set())
 
-def _serializar_reporte(reporte: Reporte) -> dict:
-    return {
-        "id": reporte.id,
-        "titulo": reporte.titulo,
-        "comentario": reporte.comentario,
-        "estado": reporte.estado.value if hasattr(reporte.estado, "value") else reporte.estado,
-        "pdf_disponible": reporte.pdf_path is not None,
-        "created_at": str(reporte.created_at),
-        "updated_at": str(reporte.updated_at),
-        "videos": [
-            {"id": v.id, "orden": v.orden, "path": v.video_path}
-            for v in reporte.videos
-        ],
-    }
+
+async def listar_reportes_admin_service(db, estado: str = None, usuario_id: int = None):
+    try:
+        query = db.query(Reporte).options(joinedload(Reporte.videos), joinedload(Reporte.infracciones))
+
+        if estado:
+            if estado not in EstadoReporte.__members__:
+                return [None, "Estado inválido"]
+            query = query.filter(Reporte.estado == EstadoReporte[estado])
+        if usuario_id:
+            query = query.filter(Reporte.usuario_id == usuario_id)
+
+        reportes = query.order_by(Reporte.created_at.desc()).all()
+        return [[_serializar_reporte_admin(r) for r in reportes], None]
+
+    except Exception as error:
+        print(f"Error al listar reportes (admin): {error}")
+        return [None, "Error interno del servidor"]
+
+
+async def get_reporte_admin_service(db, reporte_id: int):
+    try:
+        reporte = (
+            db.query(Reporte)
+            .options(joinedload(Reporte.videos), joinedload(Reporte.infracciones))
+            .filter(Reporte.id == reporte_id)
+            .first()
+        )
+        if not reporte:
+            return [None, "Reporte no encontrado"]
+        return [_serializar_reporte_admin(reporte), None]
+
+    except Exception as error:
+        print(f"Error al obtener reporte (admin): {error}")
+        return [None, "Error interno del servidor"]
+
+
+async def validar_reporte_service(
+    db, admin, reporte_id: int, severidad_validada: str,
+    infraccion_ids: list[int], infracciones_manuales: list[str], notas_admin: str | None,
+):
+    try:
+        reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
+        if not reporte:
+            return [None, "Reporte no encontrado"]
+
+        if not puede_transicionar(reporte.estado, EstadoReporte.aprobado):
+            return [None, f"No se puede aprobar un reporte en estado '{reporte.estado.value}'"]
+
+        infracciones = []
+        if infraccion_ids:
+            infracciones += db.query(Infraccion).filter(Infraccion.id.in_(infraccion_ids)).all()
+        for texto in (infracciones_manuales or []):
+            manual = Infraccion(articulo="Manual", descripcion=texto)
+            db.add(manual)
+            db.flush()  # para tener el id antes del commit
+            infracciones.append(manual)
+
+        reporte.severidad_validada = severidad_validada
+        reporte.notas_admin = notas_admin
+        reporte.infracciones = infracciones
+        reporte.estado = EstadoReporte.aprobado
+        reporte.finalizado_at = datetime.now(timezone.utc)
+        reporte.validado_por_id = admin.id
+        reporte.pdf_path = _generar_pdf_placeholder(reporte)
+
+        db.commit()
+        db.refresh(reporte)
+        return [_serializar_reporte_admin(reporte), None]
+
+    except Exception as error:
+        print(f"Error al validar reporte: {error}")
+        db.rollback()
+        return [None, "Error interno del servidor"]
+
+
+async def rechazar_reporte_service(db, admin, reporte_id: int, notas_admin: str):
+    try:
+        reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
+        if not reporte:
+            return [None, "Reporte no encontrado"]
+
+        if not puede_transicionar(reporte.estado, EstadoReporte.rechazado):
+            return [None, f"No se puede rechazar un reporte en estado '{reporte.estado.value}'"]
+
+        reporte.notas_admin = notas_admin
+        reporte.estado = EstadoReporte.rechazado
+        reporte.finalizado_at = datetime.now(timezone.utc)
+        reporte.validado_por_id = admin.id
+
+        db.commit()
+        db.refresh(reporte)
+        return [_serializar_reporte_admin(reporte), None]
+
+    except Exception as error:
+        print(f"Error al rechazar reporte: {error}")
+        db.rollback()
+        return [None, "Error interno del servidor"]
+
+
+async def eliminar_reporte_admin_service(db, reporte_id: int):
+    try:
+        reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
+        if not reporte:
+            return [None, "Reporte no encontrado"]
+
+        if reporte.estado == EstadoReporte.aprobado:
+            if not reporte.finalizado_at:
+                return [None, "El reporte no tiene fecha de finalización registrada"]
+            transcurrido = datetime.now(timezone.utc) - reporte.finalizado_at
+            if transcurrido < timedelta(days=DIAS_MINIMOS_ELIMINACION):
+                faltan = DIAS_MINIMOS_ELIMINACION - transcurrido.days
+                return [None, f"Este reporte solo puede eliminarse {DIAS_MINIMOS_ELIMINACION} días después de ser aprobado (faltan {faltan} días)"]
+
+        eliminar_carpeta_reporte(reporte.usuario_id, reporte.id)
+        db.delete(reporte)
+        db.commit()
+        return [{"id": reporte_id}, None]
+
+    except Exception as error:
+        print(f"Error al eliminar reporte (admin): {error}")
+        db.rollback()
+        return [None, "Error interno del servidor"]
+
+
+def _generar_pdf_placeholder(reporte) -> str:
+    # TODO: reemplazar por generación real una vez elijas la librería (reportlab / weasyprint)
+    return f"pendiente_generar/{reporte.id}.pdf"
+
+
+def _serializar_reporte_admin(r: Reporte) -> dict:
+    base = _serializar_reporte(r)  # reutiliza el helper que ya tienes en este archivo
+    base.update({
+        "usuario_id": r.usuario_id,
+        "severidad_ia": r.severidad_ia,
+        "confianza_ia": r.confianza_ia,
+        "severidad_validada": r.severidad_validada,
+        "notas_admin": r.notas_admin,
+        "finalizado_at": str(r.finalizado_at) if r.finalizado_at else None,
+        "infracciones": [{"id": i.id, "articulo": i.articulo, "descripcion": i.descripcion} for i in r.infracciones],
+    })
+    return base
