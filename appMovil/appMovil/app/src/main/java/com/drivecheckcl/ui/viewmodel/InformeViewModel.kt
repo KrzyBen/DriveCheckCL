@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import android.content.Context
 import com.drivecheckcl.data.local.LocalStorageManager
+import java.io.File
 
 sealed class InformeUiState {
     object Idle    : InformeUiState()
@@ -60,6 +61,22 @@ class InformeViewModel : ViewModel() {
                 onSuccess()
             } else {
                 _uiState.value = InformeUiState.Error(error ?: "Error al crear el informe")
+            }
+        }
+    }
+
+    fun descargarPdf(context: Context, reporte: InformeLocal, onSuccess: (File) -> Unit) {
+        viewModelScope.launch {
+            val path = reporte.pdfPath
+            if (path == null) {
+                _uiState.value = InformeUiState.Error("Este reporte aún no tiene PDF disponible")
+                return@launch
+            }
+            val (archivo, error) = ReporteRepository.descargarPdf(context, path, reporte.id)
+            if (archivo != null) {
+                onSuccess(archivo)
+            } else {
+                _uiState.value = InformeUiState.Error(error ?: "Error al descargar")
             }
         }
     }

@@ -7,19 +7,37 @@ enum class EstadoInforme {
     @SerializedName("enviado")    ENVIADO,
     @SerializedName("recibido")   RECIBIDO,
     @SerializedName("analizando") ANALIZANDO,
-    @SerializedName("validando")  VALIDANDO,
-    @SerializedName("resultados") RESULTADOS
+    @SerializedName("aprobado")   APROBADO,
+    @SerializedName("rechazado")  RECHAZADO
 }
 
 fun EstadoInforme.etiqueta(): String = when (this) {
     EstadoInforme.ENVIADO    -> "Enviado"
     EstadoInforme.RECIBIDO   -> "Recibido"
     EstadoInforme.ANALIZANDO -> "Analizando"
-    EstadoInforme.VALIDANDO  -> "Validando"
-    EstadoInforme.RESULTADOS -> "Resultados"
+    EstadoInforme.APROBADO   -> "Aprobado"
+    EstadoInforme.RECHAZADO  -> "Rechazado"
 }
 
 // ── Modelo usado por la UI (mapeado desde la respuesta del servidor) ──────────
+data class InformeResponse(
+    val id: Int,
+    val titulo: String,
+    val comentario: String?,
+    val estado: EstadoInforme,
+    @SerializedName("pdf_disponible")
+    val pdfDisponible: Boolean,
+    @SerializedName("pdf_path")
+    val pdfPath: String? = null,
+    @SerializedName("notas_admin")
+    val notasAdmin: String? = null,
+    @SerializedName("created_at")
+    val createdAt: String,
+    @SerializedName("updated_at")
+    val updatedAt: String,
+    val videos: List<VideoReporteResponse>
+)
+
 data class InformeLocal(
     val id: Int,
     val titulo: String,
@@ -28,7 +46,9 @@ data class InformeLocal(
     val fechaCreacion: Long,
     val estado: EstadoInforme,
     val numeracion: Int,
-    val pdfDisponible: Boolean = false
+    val pdfDisponible: Boolean = false,
+    val pdfPath: String? = null,
+    val motivoRechazo: String? = null
 )
 
 // ── Video dentro de un reporte (respuesta del servidor) ───────────────────────
@@ -36,21 +56,6 @@ data class VideoReporteResponse(
     val id: Int,
     val orden: Int,
     val path: String
-)
-
-// ── Respuesta completa de un reporte (igual para crear y listar) ──────────────
-data class InformeResponse(
-    val id: Int,
-    val titulo: String,
-    val comentario: String?,
-    val estado: EstadoInforme,
-    @SerializedName("pdf_disponible")
-    val pdfDisponible: Boolean,
-    @SerializedName("created_at")
-    val createdAt: String,
-    @SerializedName("updated_at")
-    val updatedAt: String,
-    val videos: List<VideoReporteResponse>
 )
 
 // ── Conteo de reportes (para validar límite antes de crear) ───────────────────

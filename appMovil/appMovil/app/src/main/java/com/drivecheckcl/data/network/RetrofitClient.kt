@@ -8,8 +8,8 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
-    private const val BASE_URL =
-        "https://glorious-dollop-6qxp7wxxqqwc57rr-8000.app.github.dev/"
+    const val BASE_URL =
+        "https://orange-rotary-phone-45pr96pp45xcj7p7-8000.app.github.dev/"
 
     private const val PREFS_NAME = "drivecheckcl_prefs"
 
@@ -40,10 +40,12 @@ object RetrofitClient {
         chain.proceed(request)
     }
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)
-        .addInterceptor(loggingInterceptor)
-        .build()
+    val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .build()
+    }
 
     val instance: Retrofit by lazy {
         Retrofit.Builder()

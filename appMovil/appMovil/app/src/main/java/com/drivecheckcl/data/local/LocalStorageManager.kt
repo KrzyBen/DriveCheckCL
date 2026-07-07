@@ -80,6 +80,9 @@ object LocalStorageManager {
         return dir
     }
 
+    fun getPdfReporte(context: Context, reporteId: Int): File =
+        File(getReporteDir(context, reporteId.toString()), "informe_$reporteId.pdf")
+
     fun moverVideoAReporte(
         context:   Context,
         videoPath: String,
