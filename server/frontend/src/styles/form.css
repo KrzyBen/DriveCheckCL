@@ -15,4 +15,3 @@
   background: var(--cl-blue); color: #fff; border: none; border-radius: var(--radius);
   height: 40px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 6px;
 }
-.toggle-password-icon { display: none; } /* sin iconos de ojo por ahora, ver nota abajo */

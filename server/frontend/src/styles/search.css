@@ -1,0 +1,8 @@
+.search-input-table {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}

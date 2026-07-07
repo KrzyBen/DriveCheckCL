@@ -27,7 +27,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
     volumes:
-      - storage:/storage
+      - ../server/storage:/storage
     ports:
       - "8000:8000"
     depends_on:
@@ -47,7 +47,7 @@ services:
       context: ../server/frontend
     container_name: drivecheck-frontend
     environment:
-      VITE_BASE_URL: http://localhost:8000
+      VITE_BASE_URL: ${VITE_BASE_URL}
     volumes:
       - ../server/frontend:/app
       - /app/node_modules
@@ -58,4 +58,3 @@ services:
 
 volumes:
   db-data:
-  storage:

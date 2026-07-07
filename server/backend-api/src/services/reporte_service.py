@@ -1,12 +1,13 @@
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime, timezone, timedelta
 
 from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte, Infraccion
+from entity.user_entity import User
 from helpers.storage_helper import guardar_video, eliminar_carpeta_reporte
-from datetime import datetime, timezone, timedelta
 from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
+from helpers.pdf_generator_helper import generar_pdf_informe
 
 MAX_REPORTES_POR_USUARIO = 10
-
 DIAS_MINIMOS_ELIMINACION = 60
 
 TRANSICIONES_VALIDAS = {
@@ -52,7 +53,7 @@ async def crear_reporte_service(
             estado=EstadoReporte.enviado,
         )
         db.add(nuevo_reporte)
-        db.flush()  # para obtener el id antes del commit
+        db.flush()
 
         for index, archivo in enumerate(archivos, start=1):
             ruta_relativa = guardar_video(usuario_id, nuevo_reporte.id, index, archivo)
@@ -66,7 +67,7 @@ async def crear_reporte_service(
         db.commit()
         db.refresh(nuevo_reporte)
 
-        reporte_data = _serializar_reporte(nuevo_reporte)
+        reporte_data = serializar_reporte(nuevo_reporte)
         return [reporte_data, None]
 
     except Exception as error:
@@ -88,7 +89,7 @@ async def listar_reportes_service(db: Session, usuario_id: int):
         if not reportes:
             return [[], None]
 
-        data = [_serializar_reporte(r) for r in reportes]
+        data = [serializar_reporte(r) for r in reportes]
         return [data, None]
 
     except Exception as error:
@@ -108,14 +109,14 @@ async def get_reporte_service(db: Session, usuario_id: int, reporte_id: int):
         if not reporte:
             return [None, "Reporte no encontrado"]
 
-        return [_serializar_reporte(reporte), None]
+        return [serializar_reporte(reporte), None]
 
     except Exception as error:
         print(f"Error al obtener reporte: {error}")
         return [None, "Error interno del servidor"]
 
 
-async def actualizar_estado_service(db: Session, usuario_id: int, reporte_id: int, nuevo_estado: str, pdf_path: str = None):
+async def actualizar_estado_service(db: Session, usuario_id: int, reporte_id: int, nuevo_estado: str):
     try:
         reporte = (
             db.query(Reporte)
@@ -140,7 +141,7 @@ async def actualizar_estado_service(db: Session, usuario_id: int, reporte_id: in
         db.commit()
         db.refresh(reporte)
 
-        return [_serializar_reporte(reporte), None]
+        return [serializar_reporte(reporte), None]
 
     except Exception as error:
         print(f"Error al actualizar estado: {error}")
@@ -177,8 +178,11 @@ def puede_transicionar(actual: EstadoReporte, nuevo: EstadoReporte) -> bool:
 
 async def listar_reportes_admin_service(db, estado: str = None, usuario_id: int = None):
     try:
-        query = db.query(Reporte).options(joinedload(Reporte.videos), joinedload(Reporte.infracciones))
-
+        query = (
+            db.query(Reporte)
+            .join(User, Reporte.usuario_id == User.id)
+            .options(joinedload(Reporte.videos), joinedload(Reporte.infracciones))
+        )
         if estado:
             if estado not in EstadoReporte.__members__:
                 return [None, "Estado inválido"]
@@ -187,8 +191,7 @@ async def listar_reportes_admin_service(db, estado: str = None, usuario_id: int 
             query = query.filter(Reporte.usuario_id == usuario_id)
 
         reportes = query.order_by(Reporte.created_at.desc()).all()
-        return [[_serializar_reporte_admin(r) for r in reportes], None]
-
+        return [[serializar_reporte_admin(r) for r in reportes], None]
     except Exception as error:
         print(f"Error al listar reportes (admin): {error}")
         return [None, "Error interno del servidor"]
@@ -204,7 +207,7 @@ async def get_reporte_admin_service(db, reporte_id: int):
         )
         if not reporte:
             return [None, "Reporte no encontrado"]
-        return [_serializar_reporte_admin(reporte), None]
+        return [serializar_reporte_admin(reporte), None]
 
     except Exception as error:
         print(f"Error al obtener reporte (admin): {error}")
@@ -229,7 +232,7 @@ async def validar_reporte_service(
         for texto in (infracciones_manuales or []):
             manual = Infraccion(articulo="Manual", descripcion=texto)
             db.add(manual)
-            db.flush()  # para tener el id antes del commit
+            db.flush()
             infracciones.append(manual)
 
         reporte.severidad_validada = severidad_validada
@@ -238,11 +241,11 @@ async def validar_reporte_service(
         reporte.estado = EstadoReporte.aprobado
         reporte.finalizado_at = datetime.now(timezone.utc)
         reporte.validado_por_id = admin.id
-        reporte.pdf_path = _generar_pdf_placeholder(reporte)
+        reporte.pdf_path = generar_pdf_informe(reporte)
 
         db.commit()
         db.refresh(reporte)
-        return [_serializar_reporte_admin(reporte), None]
+        return [serializar_reporte_admin(reporte), None]
 
     except Exception as error:
         print(f"Error al validar reporte: {error}")
@@ -266,7 +269,7 @@ async def rechazar_reporte_service(db, admin, reporte_id: int, notas_admin: str)
 
         db.commit()
         db.refresh(reporte)
-        return [_serializar_reporte_admin(reporte), None]
+        return [serializar_reporte_admin(reporte), None]
 
     except Exception as error:
         print(f"Error al rechazar reporte: {error}")
@@ -297,22 +300,3 @@ async def eliminar_reporte_admin_service(db, reporte_id: int):
         print(f"Error al eliminar reporte (admin): {error}")
         db.rollback()
         return [None, "Error interno del servidor"]
-
-
-def _generar_pdf_placeholder(reporte) -> str:
-    # TODO: reemplazar por generación real una vez elijas la librería (reportlab / weasyprint)
-    return f"pendiente_generar/{reporte.id}.pdf"
-
-
-def _serializar_reporte_admin(r: Reporte) -> dict:
-    base = _serializar_reporte(r)  # reutiliza el helper que ya tienes en este archivo
-    base.update({
-        "usuario_id": r.usuario_id,
-        "severidad_ia": r.severidad_ia,
-        "confianza_ia": r.confianza_ia,
-        "severidad_validada": r.severidad_validada,
-        "notas_admin": r.notas_admin,
-        "finalizado_at": str(r.finalizado_at) if r.finalizado_at else None,
-        "infracciones": [{"id": i.id, "articulo": i.articulo, "descripcion": i.descripcion} for i in r.infracciones],
-    })
-    return base

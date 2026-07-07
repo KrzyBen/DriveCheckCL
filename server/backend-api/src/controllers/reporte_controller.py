@@ -92,3 +92,4 @@ async def eliminar_reporte(
         return handle_success(200, "Reporte eliminado correctamente", data)
     except Exception as error:
         return handle_error_server(500, str(error))
+

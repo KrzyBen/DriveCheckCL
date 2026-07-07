@@ -3,21 +3,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
-from config.configEnv import settings
+from config.configEnv import ACCESS_TOKEN_SECRET
 from config.configDb import get_db
 from entity.user_entity import User
 
 security = HTTPBearer()
 
-
 def verify_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    """
-    Verifica el JWT y retorna el usuario.
-    Equivalente a la JwtStrategy de passport.auth.js
-    """
     token = credentials.credentials
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -27,7 +22,7 @@ def verify_token(
     try:
         payload = jwt.decode(
             token,
-            settings.ACCESS_TOKEN_SECRET,
+            ACCESS_TOKEN_SECRET,
             algorithms=["HS256"]
         )
         email: str = payload.get("email")

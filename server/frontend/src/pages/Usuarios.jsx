@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, Edit, Trash2, Eye } from 'lucide-react';
 import Table from '@components/Table';
 import Search from '@components/Search';
 import UsuarioPopup from '@components/UsuarioPopup';
@@ -45,7 +46,7 @@ const Usuarios = () => {
       },
     },
     {
-      title: 'Acciones', widthGrow: 1, hozAlign: 'center', headerSort: false,
+      title: 'Acciones', widthGrow: 1, hozAlign: 'right', headerSort: false,
       formatter: (cell) => {
         const rol = cell.getData().rol;
         const verBtn = rol === 'conductor' ? `<button class="table-action-btn" data-action="ver" title="Ver reportes">👁</button>` : '';
@@ -63,13 +64,17 @@ const Usuarios = () => {
   ], []);
 
   return (
-    <div className="card" style={{ padding: '1.25rem 1.5rem' }}>
+    <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <div>
           <h3 style={{ margin: 0 }}>Usuarios</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0' }}>{usuarios.length} usuarios registrados</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+            {usuarios.length} usuarios registrados
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>+ Nuevo usuario</button>
+        <button className="btn btn-primary" onClick={openCreate}>
+          <Plus size={16} /> Nuevo usuario
+        </button>
       </div>
 
       <div style={{ marginBottom: '1rem' }}>

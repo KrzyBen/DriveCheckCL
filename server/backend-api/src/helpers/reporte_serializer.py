@@ -8,10 +8,16 @@ def serializar_reporte(reporte: Reporte) -> dict:
         "comentario": reporte.comentario,
         "estado": reporte.estado.value if hasattr(reporte.estado, "value") else reporte.estado,
         "pdf_disponible": reporte.pdf_path is not None,
+        "pdf_path": reporte.pdf_path,   # <-- Agregar esta línea
+        "notas_admin": reporte.notas_admin if reporte.estado.value == "rechazado" else None,
         "created_at": str(reporte.created_at),
         "updated_at": str(reporte.updated_at),
         "videos": [
-            {"id": v.id, "orden": v.orden, "path": v.video_path}
+            {
+                "id": v.id,
+                "orden": v.orden,
+                "path": v.video_path
+            }
             for v in reporte.videos
         ],
     }
@@ -21,6 +27,7 @@ def serializar_reporte_admin(reporte: Reporte) -> dict:
     base = serializar_reporte(reporte)
     base.update({
         "usuario_id": reporte.usuario_id,
+        "usuario_nombre": reporte.usuario.nombre_completo if reporte.usuario else None,
         "severidad_ia": reporte.severidad_ia,
         "confianza_ia": reporte.confianza_ia,
         "severidad_validada": reporte.severidad_validada,

@@ -1,8 +1,9 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { logout } from '@services/auth.service.js';
-import '@styles/navbar.css';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@context/AuthContext';
+import { Menu, Users, FileText, UserCircle, LogOut } from 'lucide-react';
+import '@styles/navbar.css';
 
 const Navbar = () => {
   const { user } = useAuth();
@@ -12,59 +13,54 @@ const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const logoutSubmit = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error al cerrar sesión:', error);
-    }
+    await logout();
+    navigate('/login');
   };
 
   const toggleMenu = () => setMenuOpen((prev) => !prev);
   useEffect(() => { setMenuOpen(false); }, [location]);
-
-  const linkClass = ({ isActive }) => (isActive ? 'active' : '');
   const closeMenu = () => setMenuOpen(false);
 
   return (
     <>
-      <header className="topbar">
-        <button className="hamburger" onClick={toggleMenu} aria-label="Abrir menú" aria-expanded={menuOpen}>
-          <span className="bar" /><span className="bar" /><span className="bar" />
-        </button>
-        <div className="brand">
-          <span className="flag-bar flag-blue" />
-          <span className="flag-bar flag-white" />
-          <span className="flag-bar flag-red" />
-          <strong>DriveCheckCL</strong>
+      <div className="topbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="btn btn-icon" onClick={toggleMenu} aria-label="Abrir menú" aria-expanded={menuOpen}>
+            <Menu size={18} />
+          </button>
+          <div className="flag-chip">
+            <span className="flag-bar flag-blue" />
+            <span className="flag-bar flag-white" />
+            <span className="flag-bar flag-red" />
+            <span style={{ fontSize: 13, fontWeight: 500, marginLeft: 4 }}>DriveCheckCL</span>
+          </div>
         </div>
-        <span className="user-name">{user?.nombre_completo}</span>
-      </header>
+        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{user?.nombre_completo}</span>
+      </div>
 
-      <nav className={`drawer ${menuOpen ? 'open' : ''}`}>
-        <ul>
+      {menuOpen && (
+        <div className="drawer">
+          <NavLink to="/home" className="drawer-item" onClick={closeMenu} end>
+            <UserCircle size={16} /> Inicio
+          </NavLink>
           {userRole === 'administrador' && (
-            <li>
-              <NavLink to="/usuarios" className={linkClass} onClick={closeMenu}>Usuarios</NavLink>
-            </li>
+            <NavLink to="/usuarios" className="drawer-item" onClick={closeMenu}>
+              <Users size={16} /> Usuarios
+            </NavLink>
           )}
           {(userRole === 'administrador' || userRole === 'validador') && (
-            <li>
-              <NavLink to="/reportes" className={linkClass} onClick={closeMenu}>Reportes</NavLink>
-            </li>
+            <NavLink to="/reportes" className="drawer-item" onClick={closeMenu}>
+              <FileText size={16} /> Reportes
+            </NavLink>
           )}
-          <li className="drawer-separator">
-            <NavLink to="/perfil" className={linkClass} onClick={closeMenu}>Perfil</NavLink>
-          </li>
-          <li>
-            <button className="drawer-item logout-btn" onClick={() => { logoutSubmit(); closeMenu(); }}>
-              Cerrar sesión
-            </button>
-          </li>
-        </ul>
-      </nav>
-
-      {menuOpen && <div className="drawer-overlay" onClick={closeMenu} />}
+          <NavLink to="/perfil" className="drawer-item drawer-separator" onClick={closeMenu}>
+            <UserCircle size={16} /> Perfil
+          </NavLink>
+          <button className="drawer-item" onClick={() => { logoutSubmit(); closeMenu(); }}>
+            <LogOut size={16} /> Cerrar sesión
+          </button>
+        </div>
+      )}
     </>
   );
 };

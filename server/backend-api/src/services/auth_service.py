@@ -2,7 +2,7 @@ from datetime import timedelta
 from jose import jwt
 from sqlalchemy.orm import Session
 
-from config.configEnv import settings
+from config.configEnv import ACCESS_TOKEN_SECRET
 from entity.user_entity import User
 from helpers.bcrypt_helper import encrypt_password, compare_password
 
@@ -29,7 +29,7 @@ async def login_service(db: Session, email: str, password: str):
 
         access_token = jwt.encode(
             payload,
-            settings.ACCESS_TOKEN_SECRET,
+            ACCESS_TOKEN_SECRET,
             algorithm="HS256"
         )
 

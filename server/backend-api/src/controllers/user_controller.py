@@ -7,10 +7,11 @@ from entity.user_entity import User
 from middlewares.authorization_middleware import is_admin
 from services.user_service import (
     get_user_service, get_users_service, create_user_admin_service,
-    update_user_admin_service, delete_user_service,
+    update_user_admin_service, delete_user_service, get_perfil_service, update_perfil_service
 )
 from validations.user_validation import UserBodyValidation, UserCreateValidation
 from handlers.response_handlers import handle_success, handle_error_client, handle_error_server
+from middlewares.authentication_middleware import authenticate_jwt
 
 async def create_user_admin(
     body: UserCreateValidation,
@@ -84,5 +85,28 @@ async def delete_user(
         if error:
             return handle_error_client(400, "Error eliminando al usuario", error)
         return handle_success(200, "Usuario eliminado correctamente", user)
+    except Exception as error:
+        return handle_error_server(500, str(error))
+
+async def get_perfil(current_user: User = Depends(authenticate_jwt), db: Session = Depends(get_db)):
+    try:
+        data, error = await get_perfil_service(db, current_user.id)
+        if error:
+            return handle_error_client(404, error)
+        return handle_success(200, "Perfil encontrado", data)
+    except Exception as error:
+        return handle_error_server(500, str(error))
+
+
+async def update_perfil(
+    body: UserBodyValidation,
+    current_user: User = Depends(authenticate_jwt),
+    db: Session = Depends(get_db),
+):
+    try:
+        data, error = await update_perfil_service(db, current_user.id, body.model_dump(exclude_none=True))
+        if error:
+            return handle_error_client(400, error)
+        return handle_success(200, "Perfil actualizado", data)
     except Exception as error:
         return handle_error_server(500, str(error))
