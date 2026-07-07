@@ -1,5 +1,6 @@
 package com.drivecheckcl.ui.screens
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -15,9 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.drivecheckcl.data.model.EstadoInforme
@@ -33,8 +36,10 @@ fun MisInformesScreen(
     viewModel:       InformeViewModel = viewModel()
 ) {
     val informes by viewModel.informes.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var filtroActivo by remember { mutableIntStateOf(0) }
+    var informeAEliminar by remember { mutableStateOf<InformeLocal?>(null) }
 
     LaunchedEffect(Unit) {
         viewModel.cargarInformes()
@@ -42,8 +47,9 @@ fun MisInformesScreen(
 
     // Contadores para resumen
     val totalEnviados   = informes.count { it.estado == EstadoInforme.ENVIADO || it.estado == EstadoInforme.RECIBIDO }
-    val totalAnalizando = informes.count { it.estado == EstadoInforme.ANALIZANDO || it.estado == EstadoInforme.VALIDANDO }
-    val totalResultados = informes.count { it.estado == EstadoInforme.RESULTADOS }
+    val totalAnalizando = informes.count { it.estado == EstadoInforme.ANALIZANDO }
+    val totalAprobados  = informes.count { it.estado == EstadoInforme.APROBADO }
+    val totalRechazados = informes.count { it.estado == EstadoInforme.RECHAZADO }
 
     Column(modifier = Modifier.fillMaxSize().background(BackgroundGray)) {
 
@@ -125,24 +131,10 @@ fun MisInformesScreen(
                             modifier            = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            ResumenCard(
-                                modifier = Modifier.weight(1f),
-                                valor    = "$totalEnviados",
-                                label    = "ENVIADOS",
-                                color    = ChileBlue
-                            )
-                            ResumenCard(
-                                modifier = Modifier.weight(1f),
-                                valor    = "$totalAnalizando",
-                                label    = "ANALIZANDO",
-                                color    = WarningAmber
-                            )
-                            ResumenCard(
-                                modifier = Modifier.weight(1f),
-                                valor    = "$totalResultados",
-                                label    = "RESULTADOS",
-                                color    = SuccessGreen
-                            )
+                            ResumenCard(modifier = Modifier.weight(1f), valor = "$totalEnviados", label = "ENVIADOS", color = ChileBlue)
+                            ResumenCard(modifier = Modifier.weight(1f), valor = "$totalAnalizando", label = "ANALIZANDO", color = WarningAmber)
+                            ResumenCard(modifier = Modifier.weight(1f), valor = "$totalAprobados", label = "APROBADOS", color = SuccessGreen)
+                            ResumenCard(modifier = Modifier.weight(1f), valor = "$totalRechazados", label = "RECHAZADOS", color = Color(0xFFD52B1E))
                         }
                     }
 
@@ -150,9 +142,14 @@ fun MisInformesScreen(
 
                     items(informes, key = { it.id }) { informe ->
                         InformeCard(
-                            informe          = informe,
-                            onActualizar     = { viewModel.cargarInformes() },
-                            onDescargarPdf   = { /* futuro */ }
+                            informe        = informe,
+                            onActualizar   = { viewModel.cargarInformes() },
+                            onDescargarPdf = {
+                                viewModel.descargarPdf(context, informe) { archivo ->
+                                    abrirPdf(context, archivo)
+                                }
+                            },
+                            onEliminar     = { informeAEliminar = informe }
                         )
                     }
                 }
@@ -171,6 +168,43 @@ fun MisInformesScreen(
             )
         }
     }
+
+    // ── Diálogo de confirmación de eliminación ─────────────────────────────────
+    informeAEliminar?.let { informe ->
+        AlertDialog(
+            onDismissRequest = { informeAEliminar = null },
+            title            = { Text("Eliminar informe") },
+            text             = { Text("¿Seguro que quieres eliminar el informe \"${informe.titulo}\"? Esta acción no se puede deshacer.") },
+            confirmButton    = {
+                TextButton(onClick = {
+                    viewModel.eliminarInforme(informe.id)
+                    informeAEliminar = null
+                }) {
+                    Text("Eliminar", color = Color(0xFFD52B1E))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { informeAEliminar = null }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+}
+
+// ── Utilidad: abrir el PDF descargado con un Intent ────────────────────────────
+
+private fun abrirPdf(context: android.content.Context, archivo: java.io.File) {
+    val uri = FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        archivo
+    )
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/pdf")
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+    }
+    context.startActivity(intent)
 }
 
 // ── InformeCard ───────────────────────────────────────────────────────────────
@@ -179,7 +213,8 @@ fun MisInformesScreen(
 fun InformeCard(
     informe:        InformeLocal,
     onActualizar:   () -> Unit,
-    onDescargarPdf: () -> Unit
+    onDescargarPdf: () -> Unit,
+    onEliminar:     () -> Unit
 ) {
     val (estadoColor, estadoBg) = estadoColores(informe.estado)
 
@@ -241,6 +276,13 @@ fun InformeCard(
                         color      = estadoColor
                     )
                 }
+
+                // Botón eliminar
+                Icon(
+                    Icons.Default.Delete, null,
+                    tint     = TextHint,
+                    modifier = Modifier.size(18.dp).clickable { onEliminar() }
+                )
             }
 
             HorizontalDivider(color = BorderGray, thickness = 0.5.dp)
@@ -268,27 +310,48 @@ fun InformeCard(
                     Text("Actualizar", fontSize = 11.sp, color = TextSecondary)
                 }
 
-                // PDF o no disponible
-                if (informe.pdfDisponible) {
-                    Row(
-                        modifier  = Modifier.clickable { onDescargarPdf() },
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.PictureAsPdf, null,
-                            tint     = SuccessGreen,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Text(
-                            "Descargar PDF",
-                            fontSize   = 11.sp,
-                            color      = SuccessGreen,
-                            fontWeight = FontWeight.Medium
-                        )
+                // PDF, rechazado, o no disponible aún
+                when {
+                    informe.estado == EstadoInforme.RECHAZADO -> {
+                        Row(
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Cancel, null,
+                                tint     = Color(0xFFD52B1E),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                informe.motivoRechazo?.let { "Rechazado: $it" } ?: "Reporte rechazado",
+                                fontSize   = 11.sp,
+                                color      = Color(0xFFD52B1E),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
-                } else {
-                    Text("PDF no disponible", fontSize = 11.sp, color = TextHint)
+                    informe.pdfDisponible -> {
+                        Row(
+                            modifier  = Modifier.clickable { onDescargarPdf() },
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.PictureAsPdf, null,
+                                tint     = SuccessGreen,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "Descargar PDF",
+                                fontSize   = 11.sp,
+                                color      = SuccessGreen,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                    else -> {
+                        Text("PDF no disponible", fontSize = 11.sp, color = TextHint)
+                    }
                 }
             }
         }
@@ -299,13 +362,12 @@ fun InformeCard(
 
 @Composable
 fun estadoColores(estado: EstadoInforme): Pair<Color, Color> = when (estado) {
-    EstadoInforme.ENVIADO    -> Pair(ChileBlue,    ChileBlue.copy(alpha = 0.1f))
+    EstadoInforme.ENVIADO    -> Pair(ChileBlue, ChileBlue.copy(alpha = 0.1f))
     EstadoInforme.RECIBIDO   -> Pair(WarningAmber, WarningAmber.copy(alpha = 0.12f))
     EstadoInforme.ANALIZANDO -> Pair(Color(0xFF6D28D9), Color(0xFF6D28D9).copy(alpha = 0.1f))
-    EstadoInforme.VALIDANDO  -> Pair(Color(0xFF1D4ED8), Color(0xFF1D4ED8).copy(alpha = 0.1f))
-    EstadoInforme.RESULTADOS -> Pair(SuccessGreen, SuccessGreen.copy(alpha = 0.12f))
+    EstadoInforme.APROBADO   -> Pair(SuccessGreen, SuccessGreen.copy(alpha = 0.12f))
+    EstadoInforme.RECHAZADO  -> Pair(Color(0xFFD52B1E), Color(0xFFD52B1E).copy(alpha = 0.1f))
 }
-
 // ── Componentes auxiliares (FilterPill, ResumenCard) ───────────────────────────
 
 @Composable
