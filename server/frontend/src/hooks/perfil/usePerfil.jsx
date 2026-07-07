@@ -1,13 +1,17 @@
 import { updatePerfil } from '@services/perfil.service.js';
 import { showErrorAlert, showSuccessAlert } from '@helpers/sweetAlert.js';
+import { useAuth } from '@context/AuthContext';
 
 const usePerfil = () => {
+  const { updateUser } = useAuth();
+
   const handleUpdate = async (data) => {
     try {
       const response = await updatePerfil(data);
       if (response.status === 'Client error') {
         return showErrorAlert('Error', response.details || response.message);
       }
+      updateUser(response.data);
       showSuccessAlert('Perfil actualizado', 'Tus datos fueron guardados correctamente.');
       return response;
     } catch (error) {

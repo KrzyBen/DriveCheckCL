@@ -1,8 +1,8 @@
 import os
 import shutil
+from config.configEnv import STORAGE_PATH
 
-STORAGE_ROOT = "/storage"
-
+STORAGE_ROOT = STORAGE_PATH
 
 def get_storage_root() -> str:
     os.makedirs(STORAGE_ROOT, exist_ok=True)

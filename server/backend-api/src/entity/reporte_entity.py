@@ -23,21 +23,22 @@ class Reporte(Base):
     estado = Column(SqlEnum(EstadoReporte), nullable=False, default=EstadoReporte.enviado)
     pdf_path = Column(String(500), nullable=True)
 
-    # resultado del modelo IA (solo lectura para el admin/validador)
     severidad_ia = Column(String(20), nullable=True)
     confianza_ia = Column(Float, nullable=True)
 
-    # completado por quien valida o rechaza
     severidad_validada = Column(String(20), nullable=True)
     notas_admin = Column(String(1000), nullable=True)
     validado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
-    finalizado_at = Column(DateTime(timezone=True), nullable=True)  # se setea al pasar a "resultado" o "rechazado"
+    finalizado_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
+    # Relaciones (todas después de que las columnas ya existen)
     videos = relationship("VideoReporte", back_populates="reporte", cascade="all, delete-orphan", order_by="VideoReporte.orden")
     infracciones = relationship("Infraccion", secondary="reporte_infracciones", backref="reportes")
+    usuario = relationship("User", foreign_keys=[usuario_id], backref="reportes")
+    validado_por = relationship("User", foreign_keys=[validado_por_id])
 
     def __repr__(self):
         return f"<Reporte id={self.id} usuario_id={self.usuario_id} estado={self.estado}>"

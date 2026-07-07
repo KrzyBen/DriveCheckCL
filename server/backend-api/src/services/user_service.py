@@ -97,7 +97,6 @@ async def get_users_service(db: Session, excluir_id: int):
 
 
 async def update_user_admin_service(db: Session, target_id: int, body: dict):
-    """Edición hecha por un admin sobre OTRO usuario: no exige la contraseña actual."""
     try:
         user = db.query(User).filter(User.id == target_id).first()
         if not user:
@@ -163,5 +162,47 @@ async def delete_user_service(db: Session, current_admin: User, id: int = None, 
 
     except Exception as error:
         print(f"Error al eliminar usuario: {error}")
+        db.rollback()
+        return [None, "Error interno del servidor"]
+
+async def get_perfil_service(db: Session, current_user_id: int):
+    try:
+        user = db.query(User).filter(User.id == current_user_id).first()
+        if not user:
+            return [None, "Usuario no encontrado"]
+        return [{
+            "id": user.id, "nombre_completo": user.nombre_completo,
+            "rut": user.rut, "email": user.email, "rol": user.rol,
+        }, None]
+    except Exception as error:
+        print(f"Error al obtener perfil: {error}")
+        return [None, "Error interno del servidor"]
+
+
+async def update_perfil_service(db: Session, current_user_id: int, body: dict):
+    try:
+        user = db.query(User).filter(User.id == current_user_id).first()
+        if not user:
+            return [None, "Usuario no encontrado"]
+
+        if body.get("new_password"):
+            if not body.get("password"):
+                return [None, "Debes ingresar tu contraseña actual para cambiarla"]
+            match = await compare_password(body["password"], user.password)
+            if not match:
+                return [None, "La contraseña actual no coincide"]
+            user.password = await encrypt_password(body["new_password"])
+
+        if body.get("nombre_completo"): user.nombre_completo = body["nombre_completo"]
+        if body.get("email"): user.email = body["email"]
+
+        db.commit()
+        db.refresh(user)
+        return [{
+            "id": user.id, "nombre_completo": user.nombre_completo,
+            "rut": user.rut, "email": user.email, "rol": user.rol,
+        }, None]
+    except Exception as error:
+        print(f"Error al actualizar perfil: {error}")
         db.rollback()
         return [None, "Error interno del servidor"]

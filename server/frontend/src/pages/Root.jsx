@@ -6,10 +6,12 @@ import '@styles/styles.css';
 const Root = () => {
   return (
     <AuthProvider>
-      <Navbar />
-      <main style={{ padding: '1.5rem' }}>
-        <Outlet />
-      </main>
+      <div className="app-shell" style={{ position: 'relative' }}>
+        <Navbar />
+        <main style={{ padding: '1.25rem 1.5rem' }}>
+          <Outlet />
+        </main>
+      </div>
     </AuthProvider>
   );
 };
