@@ -181,7 +181,7 @@ async def listar_reportes_admin_service(db, estado: str = None, usuario_id: int 
         query = (
             db.query(Reporte)
             .join(User, Reporte.usuario_id == User.id)
-            .options(joinedload(Reporte.videos), joinedload(Reporte.infracciones))
+            .options(joinedload(Reporte.videos), joinedload(Reporte.infracciones), joinedload(Reporte.validacion))
         )
         if estado:
             if estado not in EstadoReporte.__members__:
@@ -201,7 +201,7 @@ async def get_reporte_admin_service(db, reporte_id: int):
     try:
         reporte = (
             db.query(Reporte)
-            .options(joinedload(Reporte.videos), joinedload(Reporte.infracciones))
+            .options(joinedload(Reporte.videos), joinedload(Reporte.infracciones), joinedload(Reporte.validacion))
             .filter(Reporte.id == reporte_id)
             .first()
         )

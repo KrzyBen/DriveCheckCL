@@ -25,6 +25,7 @@ def serializar_reporte(reporte: Reporte) -> dict:
 
 def serializar_reporte_admin(reporte: Reporte) -> dict:
     base = serializar_reporte(reporte)
+    validacion = getattr(reporte, "validacion", None)
     base.update({
         "usuario_id": reporte.usuario_id,
         "usuario_nombre": reporte.usuario.nombre_completo if reporte.usuario else None,
@@ -37,5 +38,13 @@ def serializar_reporte_admin(reporte: Reporte) -> dict:
             {"id": i.id, "articulo": i.articulo, "descripcion": i.descripcion}
             for i in reporte.infracciones
         ],
+        "validacion": {
+            "estado_analisis": validacion.estado_analisis.value,
+            "resultados_ia": validacion.resultados_ia,
+            "patente_confirmada": validacion.patente_confirmada,
+            "severidad_propuesta": validacion.severidad_propuesta,
+            "notas_ia": validacion.notas_ia,
+            "actualizado_en": str(validacion.actualizado_en) if validacion.actualizado_en else None,
+        } if validacion else None,
     })
     return base
