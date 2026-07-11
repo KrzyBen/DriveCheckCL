@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 PORT = int(os.getenv("PORT", 8000))
@@ -17,3 +17,7 @@ COOKIE_KEY = os.getenv("COOKIE_KEY")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 STORAGE_PATH = os.getenv("STORAGE_PATH", "/data/reportes")
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+
+# Canal interno hacia backend-ia (no usa JWT de usuario, usa un secreto compartido)
+BACKEND_IA_URL = os.getenv("BACKEND_IA_URL", "http://backend-ia:8100")
+INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")

@@ -13,6 +13,7 @@ from services.reporte_service import (
     rechazar_reporte_service,
     eliminar_reporte_admin_service,
 )
+from services.reporte_validacion_service import iniciar_analisis_service
 from handlers.response_handlers import handle_success, handle_error_client, handle_error_server
 
 
@@ -77,6 +78,20 @@ async def rechazar_reporte(
         if error:
             return handle_error_client(400, error)
         return handle_success(200, "Reporte rechazado", data)
+    except Exception as error:
+        return handle_error_server(500, str(error))
+
+
+async def analizar_reporte(
+    reporte_id: int,
+    current_admin: User = Depends(is_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        data, error = await iniciar_analisis_service(db, current_admin, reporte_id)
+        if error:
+            return handle_error_client(400, error)
+        return handle_success(200, "Análisis iniciado", data)
     except Exception as error:
         return handle_error_server(500, str(error))
 

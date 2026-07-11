@@ -27,6 +27,15 @@ export async function validarReporte(reporteId, data) {
   }
 }
 
+export async function analizarReporte(reporteId) {
+  try {
+    const response = await axios.post(`/admin/reportes/${reporteId}/analizar`);
+    return response.data;
+  } catch (error) {
+    return error.response?.data;
+  }
+}
+
 export async function rechazarReporte(reporteId, data) {
   try {
     const response = await axios.patch(`/admin/reportes/${reporteId}/rechazar`, data);

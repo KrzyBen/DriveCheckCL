@@ -21,6 +21,7 @@ def init_db():
     try:
         from entity.user_entity import User
         from entity.reporte_entity import Reporte, VideoReporte
+        from entity.reporte_validacion_entity import ReporteValidacion
         Base.metadata.create_all(bind=engine)
         print("=> Conexión exitosa a la base de datos!")
     except Exception as error:
