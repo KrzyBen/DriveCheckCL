@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from middlewares.authentication_middleware import authenticate_jwt
 from middlewares.authorization_middleware import is_admin
 from controllers.admin_reporte_controller import (
-    listar_reportes_admin, get_reporte_admin, validar_reporte, rechazar_reporte, eliminar_reporte_admin,
+    listar_reportes_admin, analizar_reporte, get_reporte_admin, validar_reporte, rechazar_reporte, eliminar_reporte_admin,
 )
 
 router = APIRouter(dependencies=[Depends(authenticate_jwt), Depends(is_admin)])
