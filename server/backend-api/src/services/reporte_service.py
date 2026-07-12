@@ -207,6 +207,11 @@ async def get_reporte_admin_service(db, reporte_id: int):
         )
         if not reporte:
             return [None, "Reporte no encontrado"]
+        if reporte.estado == EstadoReporte.enviado and puede_transicionar(reporte.estado, EstadoReporte.recibido):
+            reporte.estado = EstadoReporte.recibido
+            db.commit()
+            db.refresh(reporte)
+
         return [serializar_reporte_admin(reporte), None]
 
     except Exception as error:
