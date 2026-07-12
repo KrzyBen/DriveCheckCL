@@ -1,14 +1,12 @@
 import os
 
 from config import STORAGE_ROOT, MAX_VIDEOS_POR_REPORTE
-from analizadores.accidentes import AnalizadorAccidentes
 from analizadores.imprudencias import AnalizadorImprudencias
 from analizadores.patente import AnalizadorPatente
 
 # Agregar una capa nueva es agregarla a esta lista. No hay que tocar
 # nada mas de este archivo ni de main.py.
 CAPAS = [
-    AnalizadorAccidentes(),
     AnalizadorImprudencias(),
     AnalizadorPatente(),
 ]
