@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from routes.auth_routes import router as auth_router
 from routes.admin_routes import router as user_router
 from routes.app_routes import router as app_router
+from routes.internal_routes import router as internal_router
 
 router = APIRouter()
  
