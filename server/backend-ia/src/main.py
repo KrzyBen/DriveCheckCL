@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI, BackgroundTasks, Header, HTTPException, status
 from pydantic import BaseModel
 
@@ -37,17 +39,13 @@ def health():
 async def analizar(solicitud: SolicitudAnalisis, background_tasks: BackgroundTasks,
                     x_internal_key: str = Header(default=None)):
     verificar_clave_interna(x_internal_key)
-
-    # Se responde de inmediato y el analisis corre en segundo plano:
-    # backend-api no debe quedar esperando a que termine el analisis
-    # completo (puede tardar bastante mas que un timeout http normal).
     background_tasks.add_task(_procesar_en_segundo_plano, solicitud.reporte_id, solicitud.video_paths)
     return {"status": "recibido", "reporte_id": solicitud.reporte_id}
 
 
 async def _procesar_en_segundo_plano(reporte_id: int, video_paths: list[str]):
     try:
-        resultados_ia = ejecutar_pipeline(video_paths)
+        resultados_ia = await asyncio.to_thread(ejecutar_pipeline, video_paths)
         if not resultados_ia:
             await enviar_resultado(reporte_id, estado_analisis="error", resultados_ia=None)
             return
