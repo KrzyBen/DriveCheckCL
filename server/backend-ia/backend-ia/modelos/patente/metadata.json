@@ -1,0 +1,11 @@
+{
+  "modelo": "patente_deteccion",
+  "clases": [
+    "Patente"
+  ],
+  "input_size": 640,
+  "normalizacion": "0-1 (RGB)",
+  "dataset_base": "roboflow-universe-projects/license-plate-recognition-rxg4e v13",
+  "dataset_fine_tuning": "pablo-delgadillo/patentes-chile-75aam v4",
+  "nota": "La lectura del texto de la patente se hace con EasyOCR en backend-ia, no con este modelo."
+}
