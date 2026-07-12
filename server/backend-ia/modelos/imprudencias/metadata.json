@@ -1,0 +1,32 @@
+{
+  "modelo": "imprudencias_senales",
+  "clases": [
+    "person",
+    "car",
+    "truck",
+    "bus",
+    "motorcycle",
+    "red light",
+    "green light",
+    "stop sign",
+    "no entry",
+    "no overtaking",
+    "speed limit 20",
+    "speed limit 30",
+    "speed limit 40",
+    "speed limit 50",
+    "speed limit 60",
+    "speed limit 70",
+    "speed limit 80",
+    "speed limit 100",
+    "speed limit 120",
+    "no left turn",
+    "no right turn",
+    "no stopping",
+    "no u-turn"
+  ],
+  "input_size": 640,
+  "normalizacion": "0-1 (RGB)",
+  "dataset": "guisahanes/traffic-violation-detection-dataset (Kaggle)",
+  "nota": "Este modelo detecta elementos de control de transito (semaforos, senales, vehiculos). No determina por si solo si hubo una infraccion: eso se resuelve con logica adicional en analizadores/imprudencias.py, correlacionando estas detecciones a traves de varios frames del clip."
+}
