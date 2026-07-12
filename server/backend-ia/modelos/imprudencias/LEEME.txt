@@ -1,0 +1,8 @@
+Coloca aqui dos archivos para que esta capa quede activa:
+
+  modelo.onnx    (el modelo exportado, renombrado exactamente asi)
+  metadata.json  (el que generan los notebooks de entrenamiento)
+
+Mientras estos archivos no existan, backend-ia arranca igual y esta
+capa simplemente se omite del analisis (revisa GET /health para ver
+que capas estan activas).
