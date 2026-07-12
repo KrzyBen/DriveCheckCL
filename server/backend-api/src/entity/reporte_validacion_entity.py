@@ -47,7 +47,10 @@ class ReporteValidacion(Base):
     actualizado_en = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     actualizado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
-    reporte = relationship("Reporte", backref=backref("validacion", uselist=False))
+    reporte = relationship(
+        "Reporte",
+        backref=backref("validacion", uselist=False, cascade="all, delete-orphan", passive_deletes=True),
+    )
     actualizado_por = relationship("User", foreign_keys=[actualizado_por_id])
 
     def __repr__(self):
