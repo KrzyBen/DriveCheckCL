@@ -1,0 +1,5 @@
+Este es un archivo para generar la carpeta.
+
+La creación de los reportes se genera de esta manera:
+
+Usuario-Reporte-[videos] y cuando se genera el informe, se añade a la carpeta correspondiente.
