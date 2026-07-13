@@ -1,4 +1,4 @@
-# # DriveCheckCL
+ # DriveCheckCL
 
 Sistema de registro y análisis automatizado de conductas vehiculares imprudentes mediante inteligencia artificial. Proyecto de titulación desarrollado en la Universidad del Bío-Bío, orientado a la detección, registro y análisis de infracciones de tránsito en Chile a partir de video captado por dashcam, con referencia directa a la Ley N° 18.290 de Tránsito.
 
@@ -37,8 +37,6 @@ Funciones principales:
 - Creación de informes con uno o más videos asociados.
 - Envío de los informes al backend y seguimiento de su estado (enviado, recibido, analizando, aprobado, rechazado).
 - Descarga del PDF una vez que un reporte es aprobado.
-- Notificaciones locales cuando un reporte cambia a un estado final.
-- Configuración de preferencias (envío solo por WiFi, notificaciones).
 
 ### Backend API
 
@@ -49,14 +47,13 @@ Funciones principales:
 - Creación, listado, validación y rechazo de reportes.
 - Generación de PDF del informe final con WeasyPrint.
 - Servido de archivos de video y PDF.
-- Canal interno (protegido con una clave compartida, no con JWT) para recibir los resultados del análisis de IA.
+- Canal interno (protegido con una clave compartida) para recibir los resultados del análisis de IA.
 
 ### Backend IA
 
 Servicio (FastAPI + Ultralytics/YOLO + ONNX Runtime) que analiza los videos de un reporte en capas independientes. Cada capa es un modelo entrenado por separado; agregar una capa nueva no requiere modificar el resto del servicio.
 
 Capas actuales:
-- **Accidentes**: clasifica la severidad de un posible accidente (leve, moderada, grave).
 - **Imprudencias**: detecta elementos de control de tránsito (semáforos, señales, límites de velocidad) y aplica una heurística simple para sugerir infracciones.
 - **Patente**: detecta la caja de la patente en el frame y usa EasyOCR para leer el texto.
 
@@ -218,7 +215,7 @@ cd dockerConfig
 docker compose up --build
 ```
 
-Al terminar, quedan disponibles:
+Al terminar, quedan disponibles (cambiar la ip y puertos según convenga):
 - Backend API en `http://localhost:8000/api`
 - Frontend en `http://localhost:5173`
 - Backend IA en el puerto interno `8100` (no se expone al host a propósito; solo backend-api puede llamarlo dentro de la red de Docker)
@@ -333,4 +330,3 @@ docker compose exec backend-ia curl http://localhost:8100/health
 ### Infraestructura
 
 - **Docker** y **Docker Compose** para levantar los cuatro servicios juntos.
-- **GitHub Codespaces** como entorno de desarrollo, simulando el despliegue con Docker.
