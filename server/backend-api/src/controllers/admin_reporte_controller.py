@@ -12,6 +12,7 @@ from services.reporte_service import (
     validar_reporte_service,
     rechazar_reporte_service,
     eliminar_reporte_admin_service,
+    listar_infracciones_catalogo_service,
 )
 from services.reporte_validacion_service import iniciar_analisis_service
 from handlers.response_handlers import handle_success, handle_error_client, handle_error_server
@@ -106,5 +107,18 @@ async def eliminar_reporte_admin(
         if error:
             return handle_error_client(400, error)
         return handle_success(200, "Reporte eliminado correctamente", data)
+    except Exception as error:
+        return handle_error_server(500, str(error))
+
+
+async def listar_infracciones_catalogo(
+    current_admin: User = Depends(is_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        data, error = await listar_infracciones_catalogo_service(db)
+        if error:
+            return handle_error_client(400, error)
+        return handle_success(200, "Catálogo de infracciones", data)
     except Exception as error:
         return handle_error_server(500, str(error))

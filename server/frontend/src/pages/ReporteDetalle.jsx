@@ -6,15 +6,7 @@ import useValidarReporte from '@hooks/reportes/useValidarReporte.jsx';
 import useRechazarReporte from '@hooks/reportes/useRechazarReporte.jsx';
 import useAnalizarReporte from '@hooks/reportes/useAnalizarReporte.jsx';
 import RechazarReportePopup from '@components/RechazarReportePopup';
-
-
-const CATALOGO_INFRACCIONES = [
-  { id: 1, label: 'Art. 141 - No respetar luz roja' },
-  { id: 2, label: 'Art. 144 - Exceso de velocidad' },
-  { id: 3, label: 'Art. 118 - No mantener distancia de seguimiento' },
-  { id: 4, label: 'Art. 114 - Adelantamiento indebido' },
-  { id: 5, label: 'Art. 197 - Conducción en estado de ebriedad' },
-];
+import { getInfracciones } from '@services/infraction.service.js';
 
 const stateLabels = { enviado: 'Enviado', recibido: 'Recibido', analizando: 'Analizando', aprobado: 'Aprobado', rechazado: 'Rechazado' };
 const badgeClass = { enviado: 'badge-neutral', recibido: 'badge-neutral', analizando: 'badge-blue', aprobado: 'badge-green', rechazado: 'badge-red' };
@@ -36,6 +28,16 @@ const ReporteDetalle = () => {
   const { handleValidar } = useValidarReporte(fetchReporte);
   const { handleRechazar } = useRechazarReporte(fetchReporte);
   const { handleAnalizar } = useAnalizarReporte(fetchReporte);
+
+  const [catalogoInfracciones, setCatalogoInfracciones] = useState([]);
+
+  useEffect(() => {
+  getInfracciones().then((response) => {
+    if (response?.status === 'Success' && Array.isArray(response.data)) {
+      setCatalogoInfracciones(response.data);
+    }
+  });
+}, []);
 
   const [clipActivo, setClipActivo] = useState(0);
   const [severidad, setSeveridad] = useState('moderada');
@@ -83,9 +85,9 @@ const ReporteDetalle = () => {
 
   const agregarInfraccion = () => {
     if (infraccionSel === '__otra__') { setMostrarManual(true); return; }
-    const item = CATALOGO_INFRACCIONES.find((i) => String(i.id) === infraccionSel);
+    const item = catalogoInfracciones.find((i) => String(i.id) === infraccionSel);
     if (item) {
-      setInfracciones((prev) => [...prev, { tipo: 'catalogo', id: item.id, texto: item.label }]);
+      setInfracciones((prev) => [...prev, { tipo: 'catalogo', id: item.id, texto: `${item.articulo} - ${item.descripcion}` }]);
       setInfraccionSel('');
     }
   };
@@ -264,7 +266,7 @@ const ReporteDetalle = () => {
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                   <select value={infraccionSel} onChange={(e) => setInfraccionSel(e.target.value)} style={{ flex: 1 }}>
                     <option value="">Seleccionar del catálogo...</option>
-                    {CATALOGO_INFRACCIONES.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+                    {catalogoInfracciones.map((i) => <option key={i.id} value={i.id}>{i.articulo} - {i.descripcion}</option>)}
                     <option value="__otra__">Otra (escribir manualmente)</option>
                   </select>
                   <button className="btn" onClick={agregarInfraccion}><Plus size={14} /> Agregar</button>

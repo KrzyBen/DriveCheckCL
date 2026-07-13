@@ -305,3 +305,14 @@ async def eliminar_reporte_admin_service(db, reporte_id: int):
         print(f"Error al eliminar reporte (admin): {error}")
         db.rollback()
         return [None, "Error interno del servidor"]
+
+async def listar_infracciones_catalogo_service(db):
+    try:
+        infracciones = db.query(Infraccion).order_by(Infraccion.id).all()
+        return [
+            [{"id": i.id, "articulo": i.articulo, "descripcion": i.descripcion} for i in infracciones],
+            None,
+        ]
+    except Exception as error:
+        print(f"Error al listar catálogo de infracciones: {error}")
+        return [None, "Error interno del servidor"]
