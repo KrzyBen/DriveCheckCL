@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from config.configDb import init_db
-from config.initialSetup import create_users
+from config.initialSetup import create_users, create_infracciones_catalogo
 from config.configEnv import HOST, PORT, CORS_ORIGINS
 from routes.index_routes import router
 
@@ -15,6 +15,7 @@ from config.configEnv import STORAGE_PATH
 async def lifespan(app: FastAPI):
     init_db()
     await create_users()
+    await create_infracciones_catalogo()
     print(f"=> Servidor corriendo en {HOST}:{PORT}/api")
     yield
 
