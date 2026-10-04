@@ -6,6 +6,7 @@ from entity.user_entity import User
 from helpers.storage_helper import guardar_video, eliminar_carpeta_reporte
 from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
 from helpers.pdf_generator_helper import generar_pdf_informe
+from services.notificacion_service import crear_notificacion
 
 MAX_REPORTES_POR_USUARIO = 10
 DIAS_MINIMOS_ELIMINACION = 60
@@ -248,6 +249,12 @@ async def validar_reporte_service(
         reporte.validado_por_id = admin.id
         reporte.pdf_path = generar_pdf_informe(reporte)
 
+        crear_notificacion(
+            db, reporte.usuario_id,
+            f"Tu reporte \"{reporte.titulo}\" fue aprobado.",
+            reporte_id=reporte.id,
+        )
+
         db.commit()
         db.refresh(reporte)
         return [serializar_reporte_admin(reporte), None]
@@ -271,6 +278,12 @@ async def rechazar_reporte_service(db, admin, reporte_id: int, notas_admin: str)
         reporte.estado = EstadoReporte.rechazado
         reporte.finalizado_at = datetime.now(timezone.utc)
         reporte.validado_por_id = admin.id
+
+        crear_notificacion(
+            db, reporte.usuario_id,
+            f"Tu reporte \"{reporte.titulo}\" fue rechazado.",
+            reporte_id=reporte.id,
+        )
 
         db.commit()
         db.refresh(reporte)

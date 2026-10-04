@@ -69,3 +69,31 @@ class RegisterValidation(BaseModel):
         if not re.match(r'^[a-zA-Z0-9]+$', v):
             raise ValueError("La contraseña solo puede contener letras y números.")
         return v
+
+
+class ForgotPasswordValidation(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordValidation(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v):
+        if not re.match(r'^\d{6}$', v):
+            raise ValueError("El código debe tener 6 dígitos.")
+        return v
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres.")
+        if len(v) > 26:
+            raise ValueError("La contraseña debe tener como máximo 26 caracteres.")
+        if not re.match(r'^[a-zA-Z0-9]+$', v):
+            raise ValueError("La contraseña solo puede contener letras y números.")
+        return v
