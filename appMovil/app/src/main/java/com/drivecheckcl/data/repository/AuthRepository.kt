@@ -69,4 +69,38 @@ class AuthRepository {
             "Error del servidor"
         }
     }
+
+    suspend fun solicitarRecuperacion(email: String): Pair<Boolean, String?> {
+        return try {
+            val response = api.forgotPassword(com.drivecheckcl.data.model.ForgotPasswordRequest(email))
+            if (response.isSuccessful && response.body()?.status == "Success") {
+                Pair(true, null)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Pair(false, parseErrorMessage(errorBody))
+            }
+        } catch (e: Exception) {
+            Pair(false, "Sin conexión al servidor")
+        }
+    }
+
+    suspend fun confirmarRecuperacion(
+        email: String,
+        code: String,
+        newPassword: String
+    ): Pair<Boolean, String?> {
+        return try {
+            val response = api.resetPassword(
+                com.drivecheckcl.data.model.ResetPasswordRequest(email, code, newPassword)
+            )
+            if (response.isSuccessful && response.body()?.status == "Success") {
+                Pair(true, null)
+            } else {
+                val errorBody = response.errorBody()?.string()
+                Pair(false, parseErrorMessage(errorBody))
+            }
+        } catch (e: Exception) {
+            Pair(false, "Sin conexión al servidor")
+        }
+    }
 }

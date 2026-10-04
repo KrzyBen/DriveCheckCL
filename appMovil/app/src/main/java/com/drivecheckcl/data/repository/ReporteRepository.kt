@@ -11,13 +11,11 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.FileOutputStream
 import com.drivecheckcl.data.local.LocalStorageManager
+import com.drivecheckcl.util.AppPreferences
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,10 +32,15 @@ object ReporteRepository {
     private val pdfClient = RetrofitClient.okHttpClient
 
     suspend fun crearReporte(
+        context: Context,
         titulo: String,
         comentario: String,
         videoPaths: List<String>
     ): Pair<InformeResponse?, String?> {
+        if (AppPreferences.soloWifiHabilitado(context) && !hayConexionWifi(context)) {
+            return Pair(null, "Tienes activado \"Enviar solo con WiFi\" y no estás conectado a una red WiFi.")
+        }
+
         return try {
             val tituloBody = titulo.toRequestBody("text/plain".toMediaTypeOrNull())
             val comentarioBody = comentario.toRequestBody("text/plain".toMediaTypeOrNull())
@@ -63,6 +66,13 @@ object ReporteRepository {
         } catch (_: Exception) {
             Pair(null, "Sin conexión al servidor")
         }
+    }
+
+    private fun hayConexionWifi(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     suspend fun misReportes(): Pair<List<InformeLocal>?, String?> {
@@ -193,7 +203,7 @@ object ReporteRepository {
 // ── Mapper: InformeResponse (servidor) → InformeLocal (UI) ────────────────────
 
 private fun InformeResponse.toInformeLocal(numeracion: Int): InformeLocal {
-    val fechaMillis = parseIsoFecha(this.createdAt)
+    val fechaMillis = com.drivecheckcl.util.parseIsoFecha(this.createdAt)
     return InformeLocal(
         id            = this.id,
         titulo        = this.titulo,
@@ -206,15 +216,4 @@ private fun InformeResponse.toInformeLocal(numeracion: Int): InformeLocal {
         pdfPath       = this.pdfPath,
         motivoRechazo = this.notasAdmin
     )
-}
-
-private fun parseIsoFecha(fecha: String): Long {
-    return try {
-        // Postgres devuelve algo como "2026-06-21 16:51:36.801253+00:00"
-        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        sdf.timeZone = TimeZone.getTimeZone("UTC")
-        sdf.parse(fecha.substring(0, 19))?.time ?: System.currentTimeMillis()
-    } catch (_: Exception) {
-        System.currentTimeMillis()
-    }
 }

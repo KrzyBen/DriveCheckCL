@@ -2,6 +2,7 @@ package com.drivecheckcl.data.local
 
 import android.content.Context
 import com.drivecheckcl.data.model.VideoLocal
+import com.drivecheckcl.util.zipFiles
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,8 +65,22 @@ object LocalStorageManager {
             } ?: emptyList()
     }
 
-    fun eliminarVideo(rutaArchivo: String): Boolean =
+    // ── Borrado de archivos ──────────────────────────────────────────────────
+
+    /**
+     * Borra un solo archivo dado su path absoluto. Sirve tanto para un video
+     * suelto en "Videos" como para un video o PDF individual dentro de una
+     * carpeta de reporte (antes se llamaba eliminarVideo, pero la implementación
+     * ya era genérica — no distinguía por extensión).
+     */
+    fun eliminarArchivo(rutaArchivo: String): Boolean =
         File(rutaArchivo).takeIf { it.exists() }?.delete() ?: false
+
+    /** Borra una carpeta de reporte completa (PDF + todos sus videos dentro). */
+    fun eliminarCarpetaReporte(context: Context, reporteId: String): Boolean {
+        val dir = getReporteDir(context, reporteId)
+        return if (dir.exists()) dir.deleteRecursively() else false
+    }
 
     // ── Reportes ──────────────────────────────────────────────────────────────
 
@@ -122,5 +137,19 @@ object LocalStorageManager {
         val dir = getReporteDir(context, reporteId)
         if (!dir.exists()) return emptyList()
         return dir.listFiles { file -> file.extension == "mp4" }?.toList() ?: emptyList()
+    }
+
+    /**
+     * Exporta un reporte completo (todos sus archivos) como un único .zip
+     * dentro de su misma carpeta. Si ya existe uno de una exportación
+     * anterior, lo reemplaza. El .zip no cuenta como archivo del reporte para
+     * listarReportesConArchivos (que solo filtra .mp4/.pdf), así que no se
+     * duplica a sí mismo si se exporta varias veces.
+     */
+    fun exportarReporteComoZip(context: Context, reporte: ReporteLocal): File? {
+        if (reporte.archivos.isEmpty()) return null
+        val dir = getReporteDir(context, reporte.id)
+        val zipFile = File(dir, "${reporte.nombreCarpeta}.zip")
+        return if (zipFiles(reporte.archivos, zipFile)) zipFile else null
     }
 }

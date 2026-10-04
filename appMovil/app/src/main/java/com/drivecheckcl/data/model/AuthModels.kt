@@ -17,6 +17,17 @@ data class RegisterRequest(
     val password: String
 )
 
+data class ForgotPasswordRequest(
+    val email: String
+)
+
+data class ResetPasswordRequest(
+    val email: String,
+    val code: String,
+    @SerializedName("new_password")
+    val newPassword: String
+)
+
 // ── Respuesta genérica del backend ────────────────────────────────────────────
 
 data class ApiResponse<T>(
