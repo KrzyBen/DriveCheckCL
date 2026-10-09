@@ -9,7 +9,7 @@ import RechazarReportePopup from '@components/RechazarReportePopup';
 import { getInfracciones } from '@services/infraction.service.js';
 
 const stateLabels = { enviado: 'Enviado', recibido: 'Recibido', analizando: 'Analizando', aprobado: 'Aprobado', rechazado: 'Rechazado' };
-const badgeClass = { enviado: 'badge-neutral', recibido: 'badge-neutral', analizando: 'badge-blue', aprobado: 'badge-green', rechazado: 'badge-red' };
+const badgeClass = { enviado: 'badge-neutral', recibido: 'badge-neutral', analizando: 'badge-blue badge-live', aprobado: 'badge-green', rechazado: 'badge-red' };
 
 // Convención de claves que va a escribir backend-ia dentro de resultados_ia.
 // Cualquier capa nueva que no esté en este mapa igual se muestra (fallback genérico más abajo).
@@ -80,7 +80,10 @@ const ReporteDetalle = () => {
     };
   }, [reporte?.validacion?.estado_analisis, fetchReporte]);
 
-  if (loading) return <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Cargando...</p>;
+  // Solo bloquea la pantalla en la carga inicial: durante el polling de 3s del
+  // análisis con IA `loading` vuelve a true pero `reporte` ya existe, y desmontar
+  // toda la página en cada refetch era lo que producía el pestañeo.
+  if (loading && !reporte) return <p className="page-sub">Cargando...</p>;
   if (!reporte) return <p>Reporte no encontrado.</p>;
 
   const agregarInfraccion = () => {
@@ -124,180 +127,186 @@ const ReporteDetalle = () => {
   const onAnalizar = () => handleAnalizar(reporte.id);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+    <div className="page-enter">
+      <div className="page-head">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h3 style={{ margin: 0 }}>Reporte #{reporte.id}</h3>
+          <div className="detalle-title">
+            <h1 className="page-title">Reporte #{reporte.id}</h1>
             <span className={`badge ${badgeClass[reporte.estado]}`}>{stateLabels[reporte.estado]}</span>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+          <p className="page-sub">
             {reporte.videos.length} clip(s) · {new Date(reporte.created_at).toLocaleString('es-CL')}
           </p>
         </div>
         <button className="btn" onClick={() => navigate('/reportes')}>
-          <ArrowLeft size={14} /> Volver
+          <ArrowLeft size={16} /> Volver
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <video
-            key={reporte.videos[clipActivo]?.id}
-            src={`${backendOrigin}/storage/${reporte.videos[clipActivo]?.path}`}
-            controls
-            style={{ width: '100%', borderRadius: 12, background: '#111' }}
-          />
-          <div style={{ display: 'flex', gap: 8 }}>
+      <div className="detalle-grid">
+        <div className="stack">
+          <div className="panel">
+            <div className="video-frame">
+              <video
+                key={reporte.videos[clipActivo]?.id}
+                src={`${backendOrigin}/storage/${reporte.videos[clipActivo]?.path}`}
+                controls
+              />
+            </div>
+          </div>
+          <div className="clip-tabs">
             {reporte.videos.map((v, idx) => (
               <button
                 key={v.id}
-                className="btn"
-                style={{ flex: 1, borderColor: idx === clipActivo ? 'var(--cl-blue)' : 'var(--border)' }}
+                className={`btn${idx === clipActivo ? ' is-active' : ''}`}
+                aria-pressed={idx === clipActivo}
                 onClick={() => setClipActivo(idx)}
               >
-                <Play size={13} /> Clip {idx + 1}
+                <Play size={14} /> Clip {idx + 1}
               </button>
             ))}
           </div>
-          <div className="card" style={{ padding: '1rem 1.25rem', background: 'var(--surface-1)' }}>
-            <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 6px' }}>Comentario del usuario</p>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{reporte.comentario || 'Sin comentario'}</p>
+          <div className="panel">
+            <div className="panel__core">
+              <p className="panel__title">Comentario del usuario</p>
+              <p className="panel__text">{reporte.comentario || 'Sin comentario'}</p>
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="stack">
 
           {/* Análisis con IA: solo tiene sentido mientras el reporte no está finalizado */}
           {!esFinal && (
-            <div className="card" style={{ padding: '1rem 1.25rem', background: 'var(--surface-1)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>Análisis con IA</p>
-                {puedeAnalizar && !analizando && (
-                  <button className="btn btn-primary" onClick={onAnalizar}>
-                    <Sparkles size={14} /> {validacion?.estado_analisis === 'error' ? 'Reintentar' : 'Analizar'}
-                  </button>
+            <div className="panel panel--ai">
+              <div className="panel__core">
+                <div className="ia-head">
+                  <p className="panel__title"><Sparkles size={17} /> Análisis con IA</p>
+                  {puedeAnalizar && !analizando && (
+                    <button className="btn btn-primary" onClick={onAnalizar}>
+                      <Sparkles size={15} /> {validacion?.estado_analisis === 'error' ? 'Reintentar' : 'Analizar'}
+                    </button>
+                  )}
+                  {analizando && (
+                    <span className="badge badge-blue badge-live">Analizando…</span>
+                  )}
+                </div>
+
+                {!validacion && (
+                  <p className="ia-empty">Aún no se ha analizado este reporte.</p>
                 )}
-                {analizando && (
-                  <span className="badge badge-blue">Analizando…</span>
+
+                {validacion?.estado_analisis === 'error' && (
+                  <p className="ia-error">
+                    No se pudo completar el análisis (backend-ia no respondió). Puedes reintentar.
+                  </p>
+                )}
+
+                {validacion?.resultados_ia && (
+                  <div className="ia-list">
+                    {Object.entries(validacion.resultados_ia).map(([clave, valor]) => {
+                      const capa = CAPAS_IA[clave] || { label: clave, icon: Sparkles };
+                      const Icono = capa.icon;
+                      const confianza = valor?.confianza != null ? `${Math.round(valor.confianza * 100)}%` : null;
+                      const texto = valor?.texto || valor?.resultado || 'Sin datos';
+                      const esNeutro = valor?.resultado === 'sin_evidencia';
+                      return (
+                        <div key={clave} className="ia-row">
+                          <span className="ia-row__label">
+                            <Icono size={18} /> {capa.label}
+                          </span>
+                          <span className={`badge ${esNeutro ? 'badge-green' : clave === 'patente' ? 'badge-neutral' : 'badge-amber'}`}>
+                            {texto}{confianza ? ` · ${confianza}` : ''}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-
-              {!validacion && (
-                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-                  Aún no se ha analizado este reporte.
-                </p>
-              )}
-
-              {validacion?.estado_analisis === 'error' && (
-                <p style={{ fontSize: 12, color: 'var(--cl-red)', margin: 0 }}>
-                  No se pudo completar el análisis (backend-ia no respondió). Puedes reintentar.
-                </p>
-              )}
-
-              {validacion?.resultados_ia && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {Object.entries(validacion.resultados_ia).map(([clave, valor]) => {
-                    const capa = CAPAS_IA[clave] || { label: clave, icon: Sparkles };
-                    const Icono = capa.icon;
-                    const confianza = valor?.confianza != null ? `${Math.round(valor.confianza * 100)}%` : null;
-                    const texto = valor?.texto || valor?.resultado || 'Sin datos';
-                    const esNeutro = valor?.resultado === 'sin_evidencia';
-                    return (
-                      <div key={clave} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', borderRadius: 'var(--radius)', padding: '10px 12px' }}>
-                        <span style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Icono size={16} color="var(--text-secondary)" /> {capa.label}
-                        </span>
-                        <span className={`badge ${esNeutro ? 'badge-green' : clave === 'patente' ? 'badge-neutral' : 'badge-amber'}`}>
-                          {texto}{confianza ? ` · ${confianza}` : ''}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           )}
 
           {esFinal ? (
             /* Vista de solo lectura una vez finalizado: ya no se puede editar ni re-enviar. */
-            <div className="card"
-                 style={{
-                   padding: '1rem 1.25rem', border: 'none',
-                   background: reporte.estado === 'aprobado' ? 'var(--cl-green-100)' : 'var(--cl-red-100)',
-                   color: reporte.estado === 'aprobado' ? 'var(--cl-green-800)' : 'var(--cl-red-800)',
-                 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <div className={`final ${reporte.estado === 'aprobado' ? 'final--ok' : 'final--bad'}`}>
+              <div className="final__head">
                 {reporte.estado === 'aprobado' ? <Check size={16} /> : <X size={16} />}
-                <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>
+                <span>
                   {reporte.estado === 'aprobado' ? `Aprobado · Severidad ${severidad}` : 'Rechazado'}
-                </p>
+                </span>
               </div>
               {infracciones.length > 0 && (
-                <p style={{ fontSize: 12, margin: '0 0 4px' }}>
+                <p className="final__line">
                   {infracciones.map((i) => i.texto).join(' · ')}
                 </p>
               )}
-              {notas && <p style={{ fontSize: 12, margin: '0 0 8px' }}>Notas: {notas}</p>}
+              {notas && <p className="final__line">Notas: {notas}</p>}
               {reporte.pdf_disponible && (
                 <a className="btn" href={`${backendOrigin}/storage/${reporte.pdf_path}`} target="_blank" rel="noreferrer">
-                  <Download size={14} /> Ver PDF
+                  <Download size={15} /> Ver PDF
                 </a>
               )}
             </div>
           ) : (
             <>
-              <div className="card" style={{ padding: '1rem 1.25rem', background: 'var(--surface-1)' }}>
-                <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                  Severidad final
-                  {validacion?.severidad_propuesta && (
-                    <span style={{ color: 'var(--text-muted)' }}> · IA sugiere: {validacion.severidad_propuesta}</span>
-                  )}
-                </label>
-                <select value={severidad} onChange={(e) => setSeveridad(e.target.value)} style={{ width: '100%', marginTop: 4 }}>
-                  <option value="leve">Leve</option>
-                  <option value="moderada">Moderada</option>
-                  <option value="grave">Grave</option>
-                </select>
-              </div>
-
-              <div className="card" style={{ padding: '1rem 1.25rem', background: 'var(--surface-1)' }}>
-                <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 8px' }}>Infracciones (Ley 18.290)</p>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                  <select value={infraccionSel} onChange={(e) => setInfraccionSel(e.target.value)} style={{ flex: 1 }}>
-                    <option value="">Seleccionar del catálogo...</option>
-                    {catalogoInfracciones.map((i) => <option key={i.id} value={i.id}>{i.articulo} - {i.descripcion}</option>)}
-                    <option value="__otra__">Otra (escribir manualmente)</option>
+              <div className="panel">
+                <div className="panel__core">
+                  <label className="field-label" htmlFor="severidad">
+                    Severidad final
+                    {validacion?.severidad_propuesta && (
+                      <span className="field-label__hint"> · IA sugiere: {validacion.severidad_propuesta}</span>
+                    )}
+                  </label>
+                  <select id="severidad" value={severidad} onChange={(e) => setSeveridad(e.target.value)}>
+                    <option value="leve">Leve</option>
+                    <option value="moderada">Moderada</option>
+                    <option value="grave">Grave</option>
                   </select>
-                  <button className="btn" onClick={agregarInfraccion}><Plus size={14} /> Agregar</button>
                 </div>
-                {mostrarManual && (
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                    <input placeholder="Ej: Art. 168 - No uso de cinturón de seguridad" value={manualTexto} onChange={(e) => setManualTexto(e.target.value)} style={{ flex: 1 }} />
-                    <button className="btn" onClick={agregarManual}>Agregar</button>
+              </div>
+
+              <div className="panel">
+                <div className="panel__core">
+                  <p className="panel__title">Infracciones (Ley 18.290)</p>
+                  <div className="infra-add">
+                    <select aria-label="Catálogo de infracciones" value={infraccionSel} onChange={(e) => setInfraccionSel(e.target.value)}>
+                      <option value="">Seleccionar del catálogo...</option>
+                      {catalogoInfracciones.map((i) => <option key={i.id} value={i.id}>{i.articulo} - {i.descripcion}</option>)}
+                      <option value="__otra__">Otra (escribir manualmente)</option>
+                    </select>
+                    <button className="btn" onClick={agregarInfraccion}><Plus size={15} /> Agregar</button>
                   </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {infracciones.map((inf, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: '#fff', borderRadius: 8, fontSize: 13 }}>
-                      <span>{inf.texto}</span>
-                      <button className="btn btn-icon" onClick={() => quitarInfraccion(idx)}><X size={13} /></button>
+                  {mostrarManual && (
+                    <div className="infra-add">
+                      <input aria-label="Infracción manual" placeholder="Ej: Art. 168 - No uso de cinturón de seguridad" value={manualTexto} onChange={(e) => setManualTexto(e.target.value)} />
+                      <button className="btn" onClick={agregarManual}>Agregar</button>
                     </div>
-                  ))}
+                  )}
+                  <div className="infra-list">
+                    {infracciones.map((inf, idx) => (
+                      <div key={idx} className="infra-item">
+                        <span>{inf.texto}</span>
+                        <button className="btn btn-icon" aria-label="Quitar infracción" onClick={() => quitarInfraccion(idx)}><X size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="card" style={{ padding: '1rem 1.25rem', background: 'var(--surface-1)' }}>
-                <label style={{ fontSize: 13, fontWeight: 500 }}>Notas del administrador</label>
-                <textarea rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} style={{ width: '100%', marginTop: 6 }} />
+              <div className="panel">
+                <div className="panel__core">
+                  <label className="field-label" htmlFor="notas">Notas del administrador</label>
+                  <textarea id="notas" rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} />
+                </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-danger-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowRechazar(true)}>
-                  <X size={15} /> Rechazar
+              <div className="actions-row">
+                <button className="btn btn-danger-outline" onClick={() => setShowRechazar(true)}>
+                  <X size={16} /> Rechazar
                 </button>
-                <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={onValidar}>
-                  <Check size={15} /> Validar y generar PDF
+                <button className="btn btn-primary" onClick={onValidar}>
+                  <Check size={16} /> Validar y generar PDF
                 </button>
               </div>
             </>

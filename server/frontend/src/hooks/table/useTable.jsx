@@ -29,7 +29,7 @@ function useTable({ data, columns, filter, dataToFilter, initialSortName, onSele
         pagination: true,
         paginationSize: 6,
         selectableRows: selectable ? 1 : false,
-        rowHeight: 46,
+        rowHeight: 60,
         langs: { "default": { "pagination": { "first": "Primero", "prev": "Anterior", "next": "Siguiente", "last": "Último" } } },
         initialSort: [{ column: initialSortName, dir: "asc" }],
       });

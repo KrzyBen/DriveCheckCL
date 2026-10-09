@@ -4,11 +4,6 @@ from entity.notificacion_entity import Notificacion
 
 
 def crear_notificacion(db: Session, usuario_id: int, mensaje: str, reporte_id: int | None = None) -> None:
-    """
-    Encola una notificación sin hacer commit: se llama desde dentro de otro
-    flujo (ej. al aprobar/rechazar un reporte) que ya maneja su propio
-    commit/rollback, así que este helper solo hace db.add().
-    """
     db.add(Notificacion(usuario_id=usuario_id, reporte_id=reporte_id, mensaje=mensaje))
 
 

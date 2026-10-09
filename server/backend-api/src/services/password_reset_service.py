@@ -15,11 +15,6 @@ def _generar_codigo() -> str:
 
 
 async def request_password_reset_service(db: Session, email: str):
-    """
-    Genera y envía un código de recuperación. Siempre devuelve éxito, exista
-    o no el correo: el controlador responde el mismo mensaje genérico en
-    ambos casos para no revelar qué correos están registrados.
-    """
     try:
         user = db.query(User).filter(User.email == email).first()
 

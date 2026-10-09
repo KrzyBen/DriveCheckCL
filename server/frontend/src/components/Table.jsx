@@ -4,7 +4,9 @@ export default function Table({ data, columns, filter, dataToFilter, initialSort
   const { tableRef } = useTable({ data, columns, filter, dataToFilter, initialSortName, onSelectionChange, selectable });
   return (
     <div className='table-container'>
-      <div ref={tableRef}></div>
+      <div className='table-container__core'>
+        <div ref={tableRef}></div>
+      </div>
     </div>
   );
 }

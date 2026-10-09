@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import Table from '@components/Table';
 import Search from '@components/Search';
 import UsuarioPopup from '@components/UsuarioPopup';
@@ -8,6 +8,7 @@ import useUsuarios from '@hooks/usuarios/useUsuarios.jsx';
 import useCreateUsuario from '@hooks/usuarios/useCreateUsuario.jsx';
 import useUpdateUsuario from '@hooks/usuarios/useUpdateUsuario.jsx';
 import useDeleteUsuario from '@hooks/usuarios/useDeleteUsuario.jsx';
+import { iconEye, iconPencil, iconTrash } from '@helpers/icons.js';
 
 const Usuarios = () => {
   const { usuarios, fetchUsuarios } = useUsuarios();
@@ -34,11 +35,11 @@ const Usuarios = () => {
   };
 
   const columns = useMemo(() => [
-    { title: 'Nombre', field: 'nombre_completo', widthGrow: 2 },
-    { title: 'Correo', field: 'email', widthGrow: 2 },
-    { title: 'RUT', field: 'rut', widthGrow: 1 },
+    { title: 'Nombre', field: 'nombre_completo', widthGrow: 2, minWidth: 120, responsive: 0 },
+    { title: 'Correo', field: 'email', widthGrow: 2.2, minWidth: 210, responsive: 1 },
+    { title: 'RUT', field: 'rut', widthGrow: 1, minWidth: 130, responsive: 3 },
     {
-      title: 'Rol', field: 'rol', widthGrow: 1,
+      title: 'Rol', field: 'rol', widthGrow: 1.2, minWidth: 170, responsive: 2,
       formatter: (cell) => {
         const rol = cell.getValue();
         const cls = rol === 'administrador' ? 'badge-blue' : rol === 'validador' ? 'badge-amber' : 'badge-neutral';
@@ -46,11 +47,11 @@ const Usuarios = () => {
       },
     },
     {
-      title: 'Acciones', widthGrow: 1, hozAlign: 'right', headerSort: false,
+      title: 'Acciones', widthGrow: 1.4, minWidth: 176, responsive: 0, hozAlign: 'right', headerHozAlign: 'right', headerSort: false,
       formatter: (cell) => {
         const rol = cell.getData().rol;
-        const verBtn = rol === 'conductor' ? `<button class="table-action-btn" data-action="ver" title="Ver reportes">👁</button>` : '';
-        return `${verBtn}<button class="table-action-btn" data-action="editar" title="Editar">✎</button><button class="table-action-btn" data-action="eliminar" title="Eliminar">🗑</button>`;
+        const verBtn = rol === 'conductor' ? `<button class="table-action-btn" data-action="ver" title="Ver reportes" aria-label="Ver reportes">${iconEye}</button>` : '';
+        return `${verBtn}<button class="table-action-btn" data-action="editar" title="Editar" aria-label="Editar usuario">${iconPencil}</button><button class="table-action-btn table-action-btn--danger" data-action="eliminar" title="Eliminar" aria-label="Eliminar usuario">${iconTrash}</button>`;
       },
       cellClick: (e, cell) => {
         const action = e.target.closest('button')?.dataset.action;
@@ -64,13 +65,11 @@ const Usuarios = () => {
   ], []);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div className="page-enter">
+      <div className="page-head">
         <div>
-          <h3 style={{ margin: 0 }}>Usuarios</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0' }}>
-            {usuarios.length} usuarios registrados
-          </p>
+          <h1 className="page-title">Usuarios</h1>
+          <p className="page-sub">{usuarios.length} usuarios registrados</p>
         </div>
         <button className="btn btn-primary" onClick={openCreate}>
           <Plus size={16} /> Nuevo usuario

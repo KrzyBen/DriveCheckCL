@@ -1,17 +1,31 @@
-.form { display: flex; flex-direction: column; gap: 1rem; max-width: 360px; width: 100%; }
-.form h1 { font-size: 18px; text-align: center; color: var(--cl-blue-800); margin: 0 0 0.5rem; }
-.container_inputs { display: flex; flex-direction: column; gap: 4px; }
-.container_inputs label { font-size: 12px; color: var(--text-secondary); }
+.form { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+.form h1 { font-size: 30px; text-align: center; color: var(--ink); margin: 0 0 0.5rem; }
+.form h1:empty { display: none; }
+.container_inputs { position: relative; display: flex; flex-direction: column; gap: 8px; }
+.container_inputs label { font-size: 13px; font-weight: 600; color: #2A3550; }
 .container_inputs input,
 .container_inputs select,
-.container_inputs textarea {
-  border: 1px solid var(--border); border-radius: var(--radius);
-  height: 38px; padding: 0 10px; font-size: 14px;
-}
-.container_inputs textarea { height: auto; padding: 8px 10px; }
-.error-message { font-size: 12px; color: var(--cl-red); min-height: 14px; }
+.container_inputs textarea { width: 100%; }
+.error-message { font-size: 12px; color: var(--cl-red-700); min-height: 14px; }
 .error-message:not(.visible) { visibility: hidden; }
 .form button[type='submit'] {
-  background: var(--cl-blue); color: #fff; border: none; border-radius: var(--radius);
-  height: 40px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 6px;
+  height: 46px; margin-top: 6px; padding: 0 22px;
+  border: 0; border-radius: var(--radius);
+  background: var(--cl-blue); color: #fff;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  box-shadow: var(--shadow-primary);
+  transition: transform 0.5s var(--ease);
 }
+.form button[type='submit']:hover { transform: translateY(-2px); }
+.form button[type='submit']:active { transform: scale(0.98); }
+
+/* Ojito de mostrar/ocultar contraseña (antes sin estilos). Se ancla al input:
+   label (~20px) + gap (8px) + mitad del input (22px) - mitad del ícono. */
+.toggle-password-icon {
+  position: absolute; right: 14px; top: 38px;
+  width: 20px; height: 20px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0.7; transition: opacity 0.3s var(--ease);
+}
+.toggle-password-icon:hover { opacity: 1; }
+.toggle-password-icon img { width: 18px; height: 18px; display: block; }
