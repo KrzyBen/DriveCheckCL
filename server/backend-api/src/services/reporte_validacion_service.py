@@ -1,10 +1,11 @@
 import httpx
+from sqlalchemy import func
 
 from entity.reporte_entity import Reporte, EstadoReporte
 from entity.reporte_validacion_entity import ReporteValidacion, EstadoAnalisis
 from config.configEnv import BACKEND_IA_URL, INTERNAL_API_KEY
 from helpers.reporte_serializer import serializar_reporte_admin
-from services.reporte_service import puede_transicionar
+from services.reporte_service import puede_transicionar, analisis_en_curso
 
 
 async def iniciar_analisis_service(db, admin, reporte_id: int):
@@ -12,6 +13,9 @@ async def iniciar_analisis_service(db, admin, reporte_id: int):
         reporte = (
             db.query(Reporte)
             .filter(Reporte.id == reporte_id)
+            # Bloquea la fila hasta el commit: dos clics seguidos en "Analizar"
+            # se atienden de a uno y el segundo ve el estado ya actualizado.
+            .with_for_update()
             .first()
         )
         if not reporte:
@@ -29,12 +33,17 @@ async def iniciar_analisis_service(db, admin, reporte_id: int):
             .filter(ReporteValidacion.reporte_id == reporte_id)
             .first()
         )
+        if analisis_en_curso(validacion):
+            return [None, "El análisis de este reporte ya está en curso"]
         if not validacion:
             validacion = ReporteValidacion(reporte_id=reporte_id)
             db.add(validacion)
 
         validacion.estado_analisis = EstadoAnalisis.analizando
         validacion.actualizado_por_id = admin.id
+        validacion.resultados_ia = None
+        validacion.notas_ia = None
+        validacion.actualizado_en = func.now()
 
         reporte.estado = EstadoReporte.analizando
 
@@ -46,11 +55,22 @@ async def iniciar_analisis_service(db, admin, reporte_id: int):
         video_paths = [v.video_path for v in reporte.videos]
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                await client.post(
+                respuesta = await client.post(
                     f"{BACKEND_IA_URL}/analizar",
                     json={"reporte_id": reporte_id, "video_paths": video_paths},
                     headers={"X-Internal-Key": INTERNAL_API_KEY or ""},
                 )
+                # Sin esto, un 401/422/500 de backend-ia pasaba como éxito y el
+                # reporte quedaba en 'analizando' para siempre.
+                respuesta.raise_for_status()
+        except httpx.HTTPStatusError as error:
+            print(f"backend-ia rechazó la solicitud de análisis: {error}")
+            validacion.estado_analisis = EstadoAnalisis.error
+            validacion.notas_ia = (
+                f"El servicio de análisis (backend-ia) rechazó la solicitud "
+                f"(HTTP {error.response.status_code})."
+            )
+            db.commit()
         except httpx.HTTPError as error:
             print(f"No se pudo contactar a backend-ia: {error}")
             validacion.estado_analisis = EstadoAnalisis.error
@@ -79,6 +99,10 @@ async def guardar_resultado_validacion_service(
         )
         if not validacion:
             return [None, "No existe un análisis iniciado para este reporte"]
+
+        reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
+        if reporte and reporte.estado in (EstadoReporte.aprobado, EstadoReporte.rechazado):
+            return [None, f"El reporte ya fue {reporte.estado.value}; se descarta el resultado del análisis"]
 
         validacion.estado_analisis = EstadoAnalisis[estado_analisis]
         if resultados_ia is not None:

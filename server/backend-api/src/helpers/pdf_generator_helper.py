@@ -1,3 +1,4 @@
+from html import escape
 from weasyprint import HTML
 from datetime import datetime
 from entity.reporte_entity import Reporte
@@ -6,15 +7,21 @@ from helpers.storage_helper import get_reporte_dir
 SEVERIDAD_LABELS = {"leve": "Leve", "moderada": "Moderada", "grave": "Grave"}
 
 
+def _texto(valor, vacio: str = "—") -> str:
+    if valor is None or not str(valor).strip():
+        return escape(vacio)
+    return escape(str(valor)).replace("\n", "<br>")
+
+
 def _construir_html(reporte: Reporte) -> str:
     infracciones_html = "".join(
-        f'<div class="infraccion"><span>{i.articulo} — {i.descripcion}</span></div>'
+        f'<div class="infraccion"><span>{_texto(i.articulo)} — {_texto(i.descripcion)}</span></div>'
         for i in reporte.infracciones
     ) or '<p class="sin-infracciones">Sin infracciones registradas</p>'
 
     fecha_emision = datetime.now().strftime("%d %b %Y")
-    usuario_nombre = reporte.usuario.nombre_completo if reporte.usuario else "—"
-    validador_nombre = reporte.validado_por.nombre_completo if reporte.validado_por else "—"
+    usuario_nombre = _texto(reporte.usuario.nombre_completo if reporte.usuario else None)
+    validador_nombre = _texto(reporte.validado_por.nombre_completo if reporte.validado_por else None)
 
     return f"""
     <html>
@@ -66,13 +73,13 @@ def _construir_html(reporte: Reporte) -> str:
         </div>
 
         <p class="seccion-titulo">Descripción del incidente</p>
-        <p class="descripcion">{reporte.comentario or 'Sin comentario del usuario.'}</p>
+        <p class="descripcion">{_texto(reporte.comentario, 'Sin comentario del usuario.')}</p>
 
         <p class="seccion-titulo">Infracciones detectadas</p>
         {infracciones_html}
 
         <p class="seccion-titulo">Notas del validador</p>
-        <p class="descripcion">{reporte.notas_admin or 'Sin notas adicionales.'}</p>
+        <p class="descripcion">{_texto(reporte.notas_admin, 'Sin notas adicionales.')}</p>
 
         <div class="footer">
             <span>Validado por: {validador_nombre}</span>

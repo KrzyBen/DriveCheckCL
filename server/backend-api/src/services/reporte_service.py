@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte, Infraccion
 from entity.user_entity import User
+from entity.reporte_validacion_entity import EstadoAnalisis
 from helpers.storage_helper import guardar_video, eliminar_carpeta_reporte
 from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
 from helpers.pdf_generator_helper import generar_pdf_informe
@@ -10,6 +11,10 @@ from services.notificacion_service import crear_notificacion
 
 MAX_REPORTES_POR_USUARIO = 10
 DIAS_MINIMOS_ELIMINACION = 60
+
+# Un análisis que lleva más que esto sin novedades se considera estancado
+# (backend-ia caído o callback perdido) y se permite relanzarlo.
+ANALISIS_VIGENTE = timedelta(minutes=10)
 
 TRANSICIONES_VALIDAS = {
     EstadoReporte.enviado:    {EstadoReporte.recibido, EstadoReporte.aprobado, EstadoReporte.rechazado},
@@ -198,6 +203,41 @@ async def listar_reportes_admin_service(db, estado: str = None, usuario_id: int 
         return [None, "Error interno del servidor"]
 
 
+def analisis_en_curso(validacion) -> bool:
+    """True si hay un análisis corriendo y no se ha estancado todavía."""
+    if validacion is None or validacion.estado_analisis != EstadoAnalisis.analizando:
+        return False
+    ultima_novedad = validacion.actualizado_en
+    if ultima_novedad is None:
+        return True
+    if ultima_novedad.tzinfo is None:
+        ultima_novedad = ultima_novedad.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - ultima_novedad < ANALISIS_VIGENTE
+
+
+def marcar_analisis_estancado(db, reporte) -> None:
+    """
+    Si el análisis lleva más de ANALISIS_VIGENTE sin novedades, lo pasa a 'error'.
+    El panel ya ofrece "Reintentar" para ese estado y deja de consultar solo, así
+    que un callback perdido ya no deja el reporte esperando para siempre.
+    """
+    validacion = reporte.validacion
+    if (
+        reporte.estado != EstadoReporte.analizando
+        or validacion is None
+        or validacion.estado_analisis != EstadoAnalisis.analizando
+        or analisis_en_curso(validacion)
+    ):
+        return
+    minutos = int(ANALISIS_VIGENTE.total_seconds() // 60)
+    validacion.estado_analisis = EstadoAnalisis.error
+    validacion.notas_ia = (
+        f"El análisis no respondió en {minutos} minutos (backend-ia caído o resultado perdido)."
+    )
+    db.commit()
+    db.refresh(reporte)
+
+
 async def get_reporte_admin_service(db, reporte_id: int):
     try:
         reporte = (
@@ -212,6 +252,8 @@ async def get_reporte_admin_service(db, reporte_id: int):
             reporte.estado = EstadoReporte.recibido
             db.commit()
             db.refresh(reporte)
+
+        marcar_analisis_estancado(db, reporte)
 
         return [serializar_reporte_admin(reporte), None]
 
