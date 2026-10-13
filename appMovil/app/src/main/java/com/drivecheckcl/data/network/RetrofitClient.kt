@@ -1,6 +1,7 @@
 package com.drivecheckcl.data.network
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import com.drivecheckcl.feature.auth.SessionManager
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -8,17 +9,25 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
 object RetrofitClient {
+    // Dirección del backend. Si cambia (otro Codespace o el servidor del
+    // laboratorio), se cambia solo aquí.
     const val BASE_URL =
         "https://ideal-cod-wpq4jxqqq6vc55vv-8000.app.github.dev/"
 
+    // Por defecto no registra nada. En init() pasa a BASIC solo en builds de
+    // depuración, y nunca con cuerpos: con BODY se filtraban contraseñas y
+    // tokens a Logcat y, al subir videos, se copiaba el cuerpo completo a memoria.
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.NONE
+        redactHeader("Authorization")
     }
 
     private lateinit var appContext: Context
 
     fun init(context: Context) {
         appContext = context.applicationContext
+        val esDebug = (appContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (esDebug) loggingInterceptor.level = HttpLoggingInterceptor.Level.BASIC
     }
 
     private val authInterceptor = okhttp3.Interceptor { chain ->

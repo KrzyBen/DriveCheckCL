@@ -15,6 +15,7 @@ interface ReporteApiService {
     suspend fun crearReporte(
         @Part("titulo") titulo: RequestBody,
         @Part("comentario") comentario: RequestBody,
+        @Part("metadatos") metadatos: RequestBody,
         @Part videos: List<MultipartBody.Part>
     ): Response<ApiResponse<InformeResponse>>
 

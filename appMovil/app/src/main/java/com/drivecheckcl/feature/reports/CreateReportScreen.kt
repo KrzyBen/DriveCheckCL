@@ -28,6 +28,7 @@ import com.drivecheckcl.ui.components.feedback.ErrorBox
 import com.drivecheckcl.ui.components.layout.AppTopBar
 import com.drivecheckcl.ui.components.layout.FlagAccentBar
 import com.drivecheckcl.ui.components.text.SectionLabel
+import com.drivecheckcl.util.Constantes
 import com.drivecheckcl.util.formatNow
 
 @Composable
@@ -49,7 +50,7 @@ fun CreateReportScreen(
 
     val tituloAuto = remember { "Reporte ${formatNow()}" }
 
-    val maxVideos   = 3
+    val maxVideos   = Constantes.MAX_VIDEOS_POR_REPORTE
     val puedeEnviar = videosSeleccionados.isNotEmpty()
     val isLoading   = uiState is ReportUiState.Loading
 

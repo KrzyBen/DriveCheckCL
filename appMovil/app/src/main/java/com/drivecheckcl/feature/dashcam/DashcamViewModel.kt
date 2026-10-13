@@ -2,7 +2,6 @@ package com.drivecheckcl.feature.dashcam
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
-import com.drivecheckcl.data.DetectionResult
 import com.drivecheckcl.data.local.LocalStorageManager
 import com.drivecheckcl.data.model.VideoLocal
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,9 +25,6 @@ class DashcamViewModel : ViewModel() {
 
     private val _state = MutableStateFlow<DashcamState>(DashcamState.Idle)
     val state: StateFlow<DashcamState> = _state.asStateFlow()
-
-    private val _detecciones = MutableStateFlow<List<DetectionResult>>(emptyList())
-    val detecciones: StateFlow<List<DetectionResult>> = _detecciones.asStateFlow()
 
     private val _tiempoGrabacion = MutableStateFlow(0)
     val tiempoGrabacion: StateFlow<Int> = _tiempoGrabacion.asStateFlow()
@@ -57,15 +53,10 @@ class DashcamViewModel : ViewModel() {
     fun onGrabacionIniciada() {
         _state.value = DashcamState.Recording
         _tiempoGrabacion.value = 0
-        _detecciones.value = emptyList()
     }
 
     fun onTiempoActualizado(segundos: Int) {
         _tiempoGrabacion.value = segundos
-    }
-
-    fun onDeteccion(resultado: DetectionResult) {
-        _detecciones.value = _detecciones.value + resultado
     }
 
     fun onGrabacionGuardada(ruta: String, context: Context) {
@@ -80,6 +71,5 @@ class DashcamViewModel : ViewModel() {
     fun resetear() {
         _state.value = DashcamState.Idle
         _tiempoGrabacion.value = 0
-        _detecciones.value = emptyList()
     }
 }

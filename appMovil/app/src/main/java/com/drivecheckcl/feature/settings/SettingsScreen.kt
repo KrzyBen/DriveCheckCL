@@ -47,6 +47,10 @@ fun SettingsScreen(
     perfilViewModel: PerfilViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    // Versión instalada, leída del propio paquete.
+    val versionApp = remember {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: ""
+    }
 
     var soloWifi        by remember { mutableStateOf(AppPreferences.soloWifiHabilitado(context)) }
     var notifResultados by remember { mutableStateOf(AppPreferences.notificacionesResultadosHabilitadas(context)) }
@@ -254,7 +258,7 @@ fun SettingsScreen(
             }
 
             Text(
-                text     = "DriveCheckCL v1.0.0 · Hecho en Chile 🇨🇱",
+                text     = "DriveCheckCL v$versionApp · Hecho en Chile 🇨🇱",
                 fontSize = 11.sp,
                 color    = TextSecondary,
                 modifier = Modifier.fillMaxWidth().wrapContentWidth(Alignment.CenterHorizontally)

@@ -14,9 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.drivecheckcl.feature.home.components.NotificacionesSheet
@@ -43,12 +46,20 @@ fun HomeScreen(
     val noLeidas       by notifViewModel.noLeidas.collectAsStateWithLifecycle()
     val notificaciones by notifViewModel.notificaciones.collectAsStateWithLifecycle()
 
-    // Sin push real (ver decisión de alcance): esto solo avisa mientras el
-    // usuario tiene la app abierta y vuelve a entrar/pasar por Home.
-    LaunchedEffect(Unit) {
-        if (AppPreferences.notificacionesResultadosHabilitadas(context)) {
-            notifViewModel.refrescar()
+    // Sin push real (ver decisión de alcance): se consulta al entrar a Home y cada
+    // vez que la app vuelve a primer plano. ON_RESUME también se dispara en la
+    // primera composición, así que no hace falta un LaunchedEffect aparte.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME &&
+                AppPreferences.notificacionesResultadosHabilitadas(context)
+            ) {
+                notifViewModel.refrescar()
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     if (mostrarNotificaciones) {

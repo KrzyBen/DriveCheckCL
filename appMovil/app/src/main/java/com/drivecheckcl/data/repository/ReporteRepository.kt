@@ -20,6 +20,10 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.logging.HttpLoggingInterceptor
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
 
 object ReporteRepository {
 
@@ -45,13 +49,17 @@ object ReporteRepository {
             val tituloBody = titulo.toRequestBody("text/plain".toMediaTypeOrNull())
             val comentarioBody = comentario.toRequestBody("text/plain".toMediaTypeOrNull())
 
+            // JSON de cada clip (ubicación y hora), en el mismo orden que los videos.
+            val metadatosBody = withContext(Dispatchers.IO) { construirMetadatos(videoPaths) }
+                .toRequestBody("text/plain".toMediaTypeOrNull())
+
             val videoParts = videoPaths.mapIndexed { _, path ->
                 val file = File(path)
                 val requestFile = file.asRequestBody("video/mp4".toMediaTypeOrNull())
                 MultipartBody.Part.createFormData("videos", file.name, requestFile)
             }
 
-            val response = api.crearReporte(tituloBody, comentarioBody, videoParts)
+            val response = api.crearReporte(tituloBody, comentarioBody, metadatosBody, videoParts)
 
             if (response.isSuccessful) {
                 val body = response.body()
@@ -66,6 +74,27 @@ object ReporteRepository {
         } catch (_: Exception) {
             Pair(null, "Sin conexión al servidor")
         }
+    }
+
+    /**
+     * Arma un arreglo JSON con el contenido del archivo de metadatos de cada
+     * video, en el mismo orden. Si un video no tiene JSON (o está dañado),
+     * su posición va como null y el reporte se envía igual.
+     */
+    private fun construirMetadatos(videoPaths: List<String>): String {
+        val lista = JSONArray()
+        videoPaths.forEach { path ->
+            val archivo = LocalStorageManager.getArchivoMetadatos(File(path))
+            val entrada: Any = try {
+                if (archivo.exists()) JSONObject(archivo.readText()) else JSONObject.NULL
+            } catch (_: IOException) {
+                JSONObject.NULL
+            } catch (_: JSONException) {
+                JSONObject.NULL
+            }
+            lista.put(entrada)
+        }
+        return lista.toString()
     }
 
     private fun hayConexionWifi(context: Context): Boolean {

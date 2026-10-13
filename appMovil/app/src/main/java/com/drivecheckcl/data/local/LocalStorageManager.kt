@@ -65,16 +65,31 @@ object LocalStorageManager {
             } ?: emptyList()
     }
 
+    // ── Metadatos del clip (ubicación y hora) ────────────────────────────────
+
+    /**
+     * Archivo de metadatos (JSON) que acompaña a un video: mismo nombre y
+     * misma carpeta, con extensión .json (dashcam_X.mp4 -> dashcam_X.json).
+     */
+    fun getArchivoMetadatos(video: File): File =
+        File(video.parentFile, "${video.nameWithoutExtension}.json")
+
     // ── Borrado de archivos ──────────────────────────────────────────────────
 
     /**
      * Borra un solo archivo dado su path absoluto. Sirve tanto para un video
      * suelto en "Videos" como para un video o PDF individual dentro de una
-     * carpeta de reporte (antes se llamaba eliminarVideo, pero la implementación
-     * ya era genérica — no distinguía por extensión).
+     * carpeta de reporte. Si es un video, borra también su JSON de metadatos
+     * para no dejarlo huérfano.
      */
-    fun eliminarArchivo(rutaArchivo: String): Boolean =
-        File(rutaArchivo).takeIf { it.exists() }?.delete() ?: false
+    fun eliminarArchivo(rutaArchivo: String): Boolean {
+        val archivo = File(rutaArchivo)
+        val eliminado = archivo.takeIf { it.exists() }?.delete() ?: false
+        if (eliminado && archivo.extension == "mp4") {
+            getArchivoMetadatos(archivo).delete()
+        }
+        return eliminado
+    }
 
     /** Borra una carpeta de reporte completa (PDF + todos sus videos dentro). */
     fun eliminarCarpetaReporte(context: Context, reporteId: String): Boolean {
@@ -107,7 +122,14 @@ object LocalStorageManager {
         if (!origen.exists()) return null
         val destDir = crearCarpetaReporte(context, reporteId)
         val destino = File(destDir, origen.name)
-        return if (origen.renameTo(destino)) destino.absolutePath else null
+        if (!origen.renameTo(destino)) return null
+
+        // El JSON de metadatos viaja junto con su video.
+        val metadatosOrigen = getArchivoMetadatos(origen)
+        if (metadatosOrigen.exists()) {
+            metadatosOrigen.renameTo(getArchivoMetadatos(destino))
+        }
+        return destino.absolutePath
     }
 
     // ── NUEVO: listar reportes con sus archivos ───────────────────────────────
@@ -150,6 +172,11 @@ object LocalStorageManager {
         if (reporte.archivos.isEmpty()) return null
         val dir = getReporteDir(context, reporte.id)
         val zipFile = File(dir, "${reporte.nombreCarpeta}.zip")
-        return if (zipFiles(reporte.archivos, zipFile)) zipFile else null
+        // Los JSON de metadatos no se listan como archivos del reporte (la UI
+        // solo muestra videos y PDF), pero sí van dentro del .zip exportado.
+        val metadatos = dir.listFiles { f -> f.extension == "json" }
+            ?.sortedBy { it.name }
+            ?: emptyList()
+        return if (zipFiles(reporte.archivos + metadatos, zipFile)) zipFile else null
     }
 }

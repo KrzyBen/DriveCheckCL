@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.drivecheckcl.theme.*
 import com.drivecheckcl.util.AppPreferences
+import com.drivecheckcl.util.Constantes
 import kotlinx.coroutines.delay
 import java.io.File
 import java.util.concurrent.Executors
@@ -49,7 +50,6 @@ fun DashcamScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val state          by viewModel.state.collectAsStateWithLifecycle()
-    val detecciones    by viewModel.detecciones.collectAsStateWithLifecycle()
     val tiempoGrabacion by viewModel.tiempoGrabacion.collectAsStateWithLifecycle()
 
     // ── Permisos ──────────────────────────────────────────────────────────────
@@ -60,10 +60,32 @@ fun DashcamScreen(
         )
     }
 
+    // Ubicación: es opcional. Sin ella el video se graba igual, sin coordenadas.
+    var ubicacionPermitida by remember {
+        mutableStateOf(ClipMetadataRecorder.tienePermiso(context))
+    }
+    val metadatos = remember { ClipMetadataRecorder(context) }
+
+    val ubicacionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permisos ->
+        ubicacionPermitida = permisos[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                permisos[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    }
+
     val permisosLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permisos ->
         tienePermisos = permisos[Manifest.permission.CAMERA] == true
+        // Se pide después de cámara y micrófono para no mostrar dos diálogos a la vez.
+        if (tienePermisos && !ubicacionPermitida) {
+            ubicacionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -71,7 +93,19 @@ fun DashcamScreen(
             permisosLauncher.launch(
                 arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
             )
+        } else if (!ubicacionPermitida) {
+            ubicacionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
         }
+    }
+
+    // Al salir de la pantalla se deja de escuchar el GPS.
+    DisposableEffect(Unit) {
+        onDispose { metadatos.liberar() }
     }
 
     // ── CameraX setup ─────────────────────────────────────────────────────────
@@ -116,8 +150,8 @@ fun DashcamScreen(
                 delay(1000)
                 segundos++
                 viewModel.onTiempoActualizado(segundos)
-                // Auto-detener a los 30 segundos
-                if (segundos >= 30) {
+                // Auto-detener al llegar a la duración máxima del clip
+                if (segundos >= Constantes.DURACION_MAX_CLIP_SEGUNDOS) {
                     recording?.stop()
                     break
                 }
@@ -189,7 +223,17 @@ fun DashcamScreen(
                 }
             }
 
-            // Indicador de detecciones
+            // Estado del GPS
+            val textoGps = when {
+                !ubicacionPermitida -> "Sin ubicación"
+                else -> when (metadatos.estado) {
+                    EstadoGps.SIN_PERMISO   -> "Sin ubicación"
+                    EstadoGps.EN_ESPERA     -> "GPS en espera"
+                    EstadoGps.BUSCANDO      -> "Buscando GPS…"
+                    EstadoGps.ACTIVO        -> "GPS activo"
+                    EstadoGps.NO_DISPONIBLE -> "GPS no disponible"
+                }
+            }
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -197,7 +241,7 @@ fun DashcamScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text     = "${detecciones.size} detecciones",
+                    text     = textoGps,
                     color    = White,
                     fontSize = 12.sp
                 )
@@ -214,24 +258,6 @@ fun DashcamScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Última detección
-            if (detecciones.isNotEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(ChileRed.copy(alpha = 0.85f))
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text     = "⚠ ${detecciones.last().label}",
-                        color    = White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
             // Estado guardado
             if (state is DashcamState.Saved) {
                 Box(
@@ -267,6 +293,7 @@ fun DashcamScreen(
                         val videoDir  = viewModel.getVideoDir(context)
                         val videoFile = File(videoDir, viewModel.generarNombreVideo())
                         val outputOptions = FileOutputOptions.Builder(videoFile).build()
+                        metadatos.iniciar()
                         recording = videoCapture?.output
                             ?.prepareRecording(context, outputOptions)
                             ?.apply {
@@ -279,7 +306,9 @@ fun DashcamScreen(
                                 when (event) {
                                     is VideoRecordEvent.Start  -> viewModel.onGrabacionIniciada()
                                     is VideoRecordEvent.Finalize -> {
+                                        val datosClip = metadatos.detener()
                                         if (!event.hasError()) {
+                                            metadatos.guardarJson(videoFile, datosClip)
                                             viewModel.onGrabacionGuardada(videoFile.absolutePath, context)
                                         } else {
                                             viewModel.onError("Error al guardar el video")
@@ -287,6 +316,8 @@ fun DashcamScreen(
                                     }
                                 }
                             }
+                        // Si la cámara no estaba lista no se grabó nada: se corta el GPS.
+                        if (recording == null) metadatos.liberar()
                     } else {
                         // Detener grabación
                         recording?.stop()
@@ -308,7 +339,7 @@ fun DashcamScreen(
             }
 
             Text(
-                text     = if (isRecording) "Toca para detener (máx. 30s)" else "Toca para grabar",
+                text     = if (isRecording) "Toca para detener (máx. ${Constantes.DURACION_MAX_CLIP_SEGUNDOS}s)" else "Toca para grabar",
                 color    = White.copy(alpha = 0.7f),
                 fontSize = 12.sp
             )

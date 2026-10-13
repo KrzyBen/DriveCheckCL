@@ -72,9 +72,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.camera:camera-video:1.3.4")
     implementation("androidx.camera:camera-view:1.3.4")
-    // TFLite
-    //implementation("org.tensorflow:tensorflow-lite:2.12.0")
-    //implementation("org.tensorflow:tensorflow-lite-support:0.4.3")
     // Location (para metadatos del reporte)
     implementation("com.google.android.gms:play-services-location:21.2.0")
 }
