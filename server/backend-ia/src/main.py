@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from config import INTERNAL_API_KEY
 from orquestador import ejecutar_pipeline, CAPAS
+from contrato import hay_capa_exitosa
 from callback_client import enviar_resultado
 
 app = FastAPI(title="DriveCheckCL - backend-ia")
@@ -57,21 +58,14 @@ async def analizar(solicitud: SolicitudAnalisis, background_tasks: BackgroundTas
     return {"status": "recibido", "reporte_id": solicitud.reporte_id}
 
 
-def _hay_capa_exitosa(resultados_ia: dict) -> bool:
-    """
-    True si al menos una capa devolvio un resultado real. El orquestador deja
-    {"error": ...} en las capas que fallan, asi que un diccionario lleno de
-    errores NO es un analisis completado.
-    """
-    return any("error" not in resultado for resultado in resultados_ia.values())
-
-
 async def _procesar_en_segundo_plano(reporte_id: int, video_paths: list[str]):
     try:
         resultados_ia = await asyncio.to_thread(ejecutar_pipeline, video_paths)
-        if not _hay_capa_exitosa(resultados_ia):
+        if not hay_capa_exitosa(resultados_ia):
+            # Un contrato lleno de errores NO es un analisis completado. Se envia igual
+            # para que el panel pueda mostrar el codigo de error de cada capa.
             print(f"Reporte {reporte_id}: ninguna capa produjo resultado, se informa error.")
-            await enviar_resultado(reporte_id, estado_analisis="error", resultados_ia=None)
+            await enviar_resultado(reporte_id, estado_analisis="error", resultados_ia=resultados_ia)
             return
         await enviar_resultado(reporte_id, estado_analisis="completado", resultados_ia=resultados_ia)
     except Exception as error:

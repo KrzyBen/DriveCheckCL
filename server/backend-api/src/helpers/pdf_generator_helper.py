@@ -1,7 +1,9 @@
 from html import escape
 from weasyprint import HTML
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from entity.reporte_entity import Reporte
+from helpers.reporte_serializer import grabado_en_del_evento, ubicacion_del_evento
 from helpers.storage_helper import get_reporte_dir
 
 SEVERIDAD_LABELS = {"leve": "Leve", "moderada": "Moderada", "grave": "Grave"}
@@ -13,15 +15,39 @@ def _texto(valor, vacio: str = "—") -> str:
     return escape(str(valor)).replace("\n", "<br>")
 
 
+def _hora_chile(fecha):
+    """Fecha y hora de grabación en hora de Chile (en UTC si el sistema no tiene la zona horaria)."""
+    if fecha is None:
+        return None
+    if fecha.tzinfo is None:
+        fecha = fecha.replace(tzinfo=timezone.utc)
+    try:
+        return fecha.astimezone(ZoneInfo("America/Santiago")).strftime("%d %b %Y, %H:%M")
+    except ZoneInfoNotFoundError:
+        return fecha.astimezone(timezone.utc).strftime("%d %b %Y, %H:%M") + " UTC"
+
+
 def _construir_html(reporte: Reporte) -> str:
     infracciones_html = "".join(
         f'<div class="infraccion"><span>{_texto(i.articulo)} — {_texto(i.descripcion)}</span></div>'
         for i in reporte.infracciones
-    ) or '<p class="sin-infracciones">Sin infracciones registradas</p>'
+    ) + "".join(
+        f'<div class="infraccion"><span>Registrada manualmente — {_texto(texto)}</span></div>'
+        for texto in (reporte.infracciones_manuales or [])
+    )
+    if not infracciones_html:
+        infracciones_html = '<p class="sin-infracciones">Sin infracciones registradas</p>'
+    patente_texto = _texto(reporte.patente_confirmada, "No registrada")
 
     fecha_emision = datetime.now().strftime("%d %b %Y")
     usuario_nombre = _texto(reporte.usuario.nombre_completo if reporte.usuario else None)
     validador_nombre = _texto(reporte.validado_por.nombre_completo if reporte.validado_por else None)
+    grabado_texto = _texto(_hora_chile(grabado_en_del_evento(reporte)), "No disponible")
+    ubicacion = ubicacion_del_evento(reporte)
+    ubicacion_texto = _texto(
+        f"{ubicacion['lat']:.5f}, {ubicacion['lon']:.5f}" if ubicacion else None,
+        "No disponible",
+    )
 
     return f"""
     <html>
@@ -70,6 +96,9 @@ def _construir_html(reporte: Reporte) -> str:
             <div><span class="label">Fecha del reporte:</span> {reporte.created_at.strftime('%d %b %Y')}</div>
             <div><span class="label">Severidad:</span> <strong>{SEVERIDAD_LABELS.get(reporte.severidad_validada, '—')}</strong></div>
             <div><span class="label">Validado por:</span> {validador_nombre}</div>
+            <div><span class="label">Grabado el:</span> {grabado_texto}</div>
+            <div><span class="label">Ubicación:</span> {ubicacion_texto}</div>
+            <div><span class="label">Patente:</span> <strong>{patente_texto}</strong></div>
         </div>
 
         <p class="seccion-titulo">Descripción del incidente</p>

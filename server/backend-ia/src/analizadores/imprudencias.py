@@ -1,6 +1,7 @@
 from analizadores.base import AnalizadorBase
 
 UMBRAL_CONFIANZA = 0.4
+CLASE_LUZ_ROJA = "red light"
 
 
 class AnalizadorImprudencias(AnalizadorBase):
@@ -15,12 +16,25 @@ class AnalizadorImprudencias(AnalizadorBase):
     tiempo se puede reemplazar por logica mas precisa (por ejemplo,
     seguir la posicion del vehiculo respecto a la linea de detencion)
     sin tener que tocar el resto del pipeline.
+
+    Hallazgos posibles (de mayor a menor relevancia):
+      posible_luz_roja    luz roja presente en un tramo real del clip
+      senales_detectadas  se vieron elementos de control de transito
+      sin_evidencia       no se detecto nada por sobre el umbral
     """
 
     nombre = "imprudencias"
 
+    def __init__(self):
+        super().__init__()
+        if self.disponible and CLASE_LUZ_ROJA not in self.nombres_de_clases().values():
+            print(
+                f"[{self.nombre}] AVISO: el modelo no tiene la clase {CLASE_LUZ_ROJA!r}; "
+                "no se podra detectar luz roja."
+            )
+
     def analizar_frames(self, frames) -> dict:
-        clases = self.metadata.get("clases", [])
+        nombres = self.nombres_de_clases()
 
         # Por cada clase, guarda la confianza maxima vista y en que
         # frames (por indice) aparecio, para poder razonar sobre
@@ -35,7 +49,7 @@ class AnalizadorImprudencias(AnalizadorBase):
                 if confianza < UMBRAL_CONFIANZA:
                     continue
 
-                nombre_clase = clases[indice_clase] if indice_clase < len(clases) else str(indice_clase)
+                nombre_clase = nombres.get(indice_clase, str(indice_clase))
                 entrada = detecciones_por_clase.setdefault(nombre_clase, {"confianza_max": 0.0, "frames": []})
                 entrada["frames"].append(idx_frame)
                 entrada["confianza_max"] = max(entrada["confianza_max"], confianza)
@@ -50,22 +64,22 @@ class AnalizadorImprudencias(AnalizadorBase):
         # el vehiculo siguio avanzando con el semaforo en rojo en vez de
         # detenerse. Es una aproximacion, no una confirmacion definitiva:
         # el admin sigue siendo quien decide si es una infraccion real.
-        resultado_final = "sin_evidencia"
+        hallazgo = "sin_evidencia"
         confianza_final = 0.0
 
-        luz_roja = detecciones_por_clase.get("red light")
+        luz_roja = detecciones_por_clase.get(CLASE_LUZ_ROJA)
         if luz_roja and len(luz_roja["frames"]) >= 2:
             frames_de_aparicion = luz_roja["frames"]
             if max(frames_de_aparicion) - min(frames_de_aparicion) >= len(frames) * 0.2:
-                resultado_final = "posible_no_respeto_luz_roja"
+                hallazgo = "posible_luz_roja"
                 confianza_final = luz_roja["confianza_max"]
 
-        if resultado_final == "sin_evidencia" and elementos_detectados:
-            resultado_final = "senales_detectadas"
+        if hallazgo == "sin_evidencia" and elementos_detectados:
+            hallazgo = "senales_detectadas"
             confianza_final = max(d["confianza"] for d in elementos_detectados.values())
 
         return {
-            "resultado": resultado_final,
+            "hallazgo": hallazgo,
             "confianza": round(confianza_final, 4),
-            "elementos_detectados": elementos_detectados,
+            "detalle": {"elementos_detectados": elementos_detectados},
         }

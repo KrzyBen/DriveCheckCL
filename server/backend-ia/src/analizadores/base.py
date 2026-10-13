@@ -7,7 +7,21 @@ from ultralytics import YOLO
 from config import MODELOS_DIR, N_FRAMES
 
 
+class VideoIlegibleError(Exception):
+    """El video existe pero no se pudo leer ningun frame."""
+
+
 class AnalizadorBase:
+    """
+    Una capa de analisis (imprudencias, patente...). Cada capa vive en
+    modelos/<nombre>/ con su modelo.onnx y su metadata.json, y devuelve por
+    cada video un resultado con la forma del contrato (ver contrato.py):
+
+        {"hallazgo": str, "confianza": float, "detalle": dict}
+
+    El orquestador agrega el numero de video y elige entre los videos del reporte.
+    """
+
     nombre = "base"
 
     def __init__(self):
@@ -30,6 +44,13 @@ class AnalizadorBase:
         self.modelo = YOLO(ruta_onnx)
         print(f"[{self.nombre}] Modelo cargado desde {ruta_onnx}")
 
+    def nombres_de_clases(self) -> dict:
+        """Clases segun el propio modelo (model.names); si no las trae, las de metadata.json."""
+        nombres = getattr(self.modelo, "names", None)
+        if nombres:
+            return {int(i): str(n) for i, n in dict(nombres).items()}
+        return {i: str(n) for i, n in enumerate(self.metadata.get("clases", []))}
+
     def extraer_frames(self, video_path: str, cantidad: int = N_FRAMES):
         captura = cv2.VideoCapture(video_path)
         total_frames = int(captura.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -50,12 +71,13 @@ class AnalizadorBase:
         return frames
 
     def analizar(self, video_path: str) -> dict:
+        """Analiza un video. Lanza VideoIlegibleError si no se pudo leer ningun frame."""
         if not self.disponible:
-            return {"disponible": False}
+            raise RuntimeError(f"La capa {self.nombre} no tiene modelo cargado")
 
         frames = self.extraer_frames(video_path)
         if not frames:
-            return {"disponible": True, "error": "No se pudieron leer frames del video"}
+            raise VideoIlegibleError(video_path)
 
         return self.analizar_frames(frames)
 

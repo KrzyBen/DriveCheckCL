@@ -32,6 +32,7 @@ async def contar_reportes(
 async def crear_reporte(
     titulo: str = Form(...),
     comentario: Optional[str] = Form(None),
+    metadatos: Optional[str] = Form(None),
     videos: List[UploadFile] = File(...),
     current_user: User = Depends(authenticate_jwt),
     db: Session = Depends(get_db),
@@ -43,6 +44,7 @@ async def crear_reporte(
             titulo=titulo,
             comentario=comentario,
             archivos=videos,
+            metadatos=metadatos,
         )
         if error:
             return handle_error_client(400, error)

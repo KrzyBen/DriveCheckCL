@@ -22,6 +22,42 @@ def version_de(modulo):
         return f"NO DISPONIBLE ({type(error).__name__}: {error})"
 
 
+def autopruebas_contrato():
+    """Pruebas rapidas de la logica del contrato y de la patente (no usan modelos)."""
+    print("\n== 0. Autopruebas del contrato ==")
+    try:
+        from patente_formato import normalizar_patente
+        from contrato import elegir_mejor
+
+        esperadas = {
+            "BCDF12": ("BCDF12", True),
+            "bc-df 12": ("BCDF12", True),
+            "8CDF1Z": ("BCDF12", True),   # B->8 y Z->2 corregidos por posicion
+            "AB1234": ("AB1234", True),
+            "ABCDEF": ("ABCDEF", False),
+        }
+        fallos = []
+        for crudo, (texto, valido) in esperadas.items():
+            r = normalizar_patente(crudo)
+            if (r["texto"], r["formato_valido"]) != (texto, valido):
+                fallos.append(f"{crudo!r} -> {r['texto']!r}/{r['formato_valido']}")
+        if fallos:
+            registrar("FALLA", "normalizacion de patente", "; ".join(fallos))
+        else:
+            registrar("OK", f"normalizacion de patente ({len(esperadas)} casos)")
+
+        elegido = elegir_mejor("imprudencias", [
+            {"video": 1, "hallazgo": "senales_detectadas", "confianza": 0.95, "detalle": {}},
+            {"video": 2, "hallazgo": "posible_luz_roja", "confianza": 0.60, "detalle": {}},
+        ])
+        if elegido["video"] == 2:
+            registrar("OK", "la luz roja de un clip no la tapa una senal con mas confianza de otro")
+        else:
+            registrar("FALLA", "eleccion entre videos", f"gano el video {elegido['video']}")
+    except Exception as error:
+        registrar("FALLA", "autopruebas del contrato", f"{type(error).__name__}: {error}")
+
+
 def entorno():
     print("\n== 1. Entorno ==")
     print(f"  python {sys.version.split()[0]}")
@@ -160,10 +196,13 @@ def revisar_easyocr():
 
 
 def analizar_video(capas, ruta_video):
+    from contrato import armar_contrato, capa_ok
+
     print(f"\n== 5. Analisis del video: {ruta_video} ==")
     if not os.path.isfile(ruta_video):
         registrar("FALLA", f"el video no existe: {ruta_video}")
         return
+    capas_contrato = {}
     for nombre, capa in capas.items():
         if capa is None:
             continue
@@ -175,17 +214,21 @@ def analizar_video(capas, ruta_video):
             inicio = time.time()
             resultado = capa.analizar(ruta_video)
             duracion = time.time() - inicio
-            if "error" in resultado:
-                registrar("FALLA", f"{nombre}: el analisis devolvio error", str(resultado["error"]))
-            else:
-                registrar("OK", f"{nombre}: {len(frames)} frames analizados en {duracion:.1f} s")
-                print("         resultado:", json.dumps(resultado, ensure_ascii=False)[:300])
+            if not all(clave in resultado for clave in ("hallazgo", "confianza", "detalle")):
+                registrar("FALLA", f"{nombre}: el resultado no cumple el contrato", str(list(resultado)))
+                continue
+            registrar("OK", f"{nombre}: {len(frames)} frames analizados en {duracion:.1f} s", f"hallazgo {resultado['hallazgo']}")
+            capas_contrato[nombre] = capa_ok(dict(resultado, video=1))
         except Exception as error:
             registrar("FALLA", f"{nombre}: el analisis lanzo una excepcion", f"{type(error).__name__}: {error}")
+    if capas_contrato:
+        print("\n  resultados_ia que se enviaria a backend-api (este video como clip 1):")
+        print(json.dumps(armar_contrato(capas_contrato), ensure_ascii=False, indent=2))
 
 
 def main():
     ruta_video = sys.argv[1] if len(sys.argv) > 1 else None
+    autopruebas_contrato()
     entorno()
 
     clases = {"imprudencias": None, "patente": None}

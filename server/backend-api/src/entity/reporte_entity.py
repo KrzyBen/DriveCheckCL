@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Enum as SqlEnum, Table
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from config.configDb import Base
@@ -23,10 +24,11 @@ class Reporte(Base):
     estado = Column(SqlEnum(EstadoReporte), nullable=False, default=EstadoReporte.enviado)
     pdf_path = Column(String(500), nullable=True)
 
-    severidad_ia = Column(String(20), nullable=True)
-    confianza_ia = Column(Float, nullable=True)
-
+    # Campos que edita el admin al validar. backend-ia solo precarga la patente
+    # (y únicamente si está vacía): un reanálisis nunca pisa lo que el admin escribió.
     severidad_validada = Column(String(20), nullable=True)
+    patente_confirmada = Column(String(20), nullable=True)
+    infracciones_manuales = Column(JSONB, nullable=True)   # lista de textos libres
     notas_admin = Column(String(1000), nullable=True)
     validado_por_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
     finalizado_at = Column(DateTime(timezone=True), nullable=True)
@@ -51,6 +53,12 @@ class VideoReporte(Base):
     reporte_id = Column(Integer, ForeignKey("reportes.id", ondelete="CASCADE"), nullable=False, index=True)
     video_path = Column(String(500), nullable=False)
     orden = Column(Integer, nullable=False, default=1)
+
+    # Metadatos del clip que envía la app (opcionales). El punto focal del evento
+    # es el inicio de la grabación; el punto de fin queda solo en video_N.json.
+    lat = Column(Float, nullable=True)
+    lon = Column(Float, nullable=True)
+    grabado_en = Column(DateTime(timezone=True), nullable=True)
 
     reporte = relationship("Reporte", back_populates="videos")
 

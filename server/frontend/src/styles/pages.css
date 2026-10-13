@@ -149,3 +149,7 @@
   .actions-row { flex-direction: column-reverse; }
   .ia-row { flex-wrap: wrap; }
 }
+.lugar-title { display: flex; align-items: center; gap: 8px; }
+.lugar-title svg { color: var(--cl-blue); }
+.lugar-link { display: inline-flex; align-items: center; gap: 4px; color: var(--cl-blue); font-weight: 600; text-decoration: none; }
+.lugar-link:hover { text-decoration: underline; }
