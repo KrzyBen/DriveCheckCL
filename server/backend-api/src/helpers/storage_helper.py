@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 from config.configEnv import STORAGE_PATH
@@ -31,6 +32,20 @@ def guardar_video(usuario_id: int, reporte_id: int, orden: int, archivo) -> str:
         f"usuario_{usuario_id}", f"reporte_{reporte_id}", nombre_archivo
     )
     return ruta_relativa
+
+
+def guardar_metadatos(usuario_id: int, reporte_id: int, orden: int, documento: dict) -> str:
+    """Guarda el JSON de metadatos del clip junto a su video (video_N.json)."""
+    dir_path = get_reporte_dir(usuario_id, reporte_id)
+    nombre_archivo = f"video_{orden}.json"
+    ruta_absoluta = os.path.join(dir_path, nombre_archivo)
+
+    with open(ruta_absoluta, "w", encoding="utf-8") as archivo:
+        json.dump(documento, archivo, ensure_ascii=False, indent=2)
+
+    return os.path.join(
+        f"usuario_{usuario_id}", f"reporte_{reporte_id}", nombre_archivo
+    )
 
 
 def get_ruta_absoluta(ruta_relativa: str) -> str:

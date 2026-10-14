@@ -17,8 +17,6 @@ async def recibir_resultado_validacion(
             db, reporte_id,
             estado_analisis=body.estado_analisis,
             resultados_ia=body.resultados_ia,
-            patente_confirmada=body.patente_confirmada,
-            severidad_propuesta=body.severidad_propuesta,
             notas_ia=body.notas_ia,
         )
         if error:

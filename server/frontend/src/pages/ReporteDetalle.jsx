@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Plus, X, Check, Sparkles, CarFront, AlertTriangle, IdCard, Download } from 'lucide-react';
+import { ArrowLeft, Play, Plus, X, Check, Sparkles, CarFront, AlertTriangle, IdCard, Download, MapPin, ExternalLink } from 'lucide-react';
 import useReporte from '@hooks/reportes/useReporte.jsx';
 import useValidarReporte from '@hooks/reportes/useValidarReporte.jsx';
 import useRechazarReporte from '@hooks/reportes/useRechazarReporte.jsx';
@@ -20,6 +20,9 @@ const CAPAS_IA = {
 };
 
 const backendOrigin = import.meta.env.VITE_BASE_URL.replace(/\/api\/?$/, '');
+
+// Abre el punto del evento en OpenStreetMap (enlace externo, sin librerías de mapa).
+const urlMapa = ({ lat, lon }) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`;
 
 const ReporteDetalle = () => {
   const { id } = useParams();
@@ -170,6 +173,26 @@ const ReporteDetalle = () => {
             <div className="panel__core">
               <p className="panel__title">Comentario del usuario</p>
               <p className="panel__text">{reporte.comentario || 'Sin comentario'}</p>
+            </div>
+          </div>
+          <div className="panel">
+            <div className="panel__core">
+              <p className="panel__title lugar-title"><MapPin size={17} /> Lugar y hora de grabación</p>
+              <p className="panel__text">
+                {reporte.grabado_en
+                  ? new Date(reporte.grabado_en).toLocaleString('es-CL', { timeZone: 'America/Santiago' })
+                  : 'Hora de grabación no disponible'}
+              </p>
+              <p className="panel__text">
+                {reporte.ubicacion ? (
+                  <>
+                    {reporte.ubicacion.lat.toFixed(5)}, {reporte.ubicacion.lon.toFixed(5)}{' · '}
+                    <a className="lugar-link" href={urlMapa(reporte.ubicacion)} target="_blank" rel="noopener noreferrer">
+                      Ver en el mapa <ExternalLink size={13} />
+                    </a>
+                  </>
+                ) : 'Ubicación no disponible'}
+              </p>
             </div>
           </div>
         </div>

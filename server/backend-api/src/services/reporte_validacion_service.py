@@ -5,6 +5,7 @@ from entity.reporte_entity import Reporte, EstadoReporte
 from entity.reporte_validacion_entity import ReporteValidacion, EstadoAnalisis
 from config.configEnv import BACKEND_IA_URL, INTERNAL_API_KEY
 from helpers.reporte_serializer import serializar_reporte_admin
+from helpers.contrato_helper import patente_sugerida
 from services.reporte_service import puede_transicionar, analisis_en_curso
 
 
@@ -88,8 +89,7 @@ async def iniciar_analisis_service(db, admin, reporte_id: int):
 
 async def guardar_resultado_validacion_service(
     db, reporte_id: int, estado_analisis: str,
-    resultados_ia: dict | None, patente_confirmada: str | None,
-    severidad_propuesta: str | None, notas_ia: str | None,
+    resultados_ia: dict | None, notas_ia: str | None,
 ):
     try:
         validacion = (
@@ -107,12 +107,15 @@ async def guardar_resultado_validacion_service(
         validacion.estado_analisis = EstadoAnalisis[estado_analisis]
         if resultados_ia is not None:
             validacion.resultados_ia = resultados_ia
-        if patente_confirmada is not None:
-            validacion.patente_confirmada = patente_confirmada
-        if severidad_propuesta is not None:
-            validacion.severidad_propuesta = severidad_propuesta
         if notas_ia is not None:
             validacion.notas_ia = notas_ia
+
+        # La patente que leyó la IA se precarga solo si el admin todavía no escribió
+        # una: un reanálisis nunca pisa lo que ya editó.
+        if estado_analisis == "completado" and reporte and not reporte.patente_confirmada:
+            sugerida = patente_sugerida(resultados_ia)
+            if sugerida:
+                reporte.patente_confirmada = sugerida
 
         db.commit()
         db.refresh(validacion)

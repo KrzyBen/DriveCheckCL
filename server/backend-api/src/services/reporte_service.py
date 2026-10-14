@@ -4,7 +4,8 @@ from datetime import datetime, timezone, timedelta
 from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte, Infraccion
 from entity.user_entity import User
 from entity.reporte_validacion_entity import EstadoAnalisis
-from helpers.storage_helper import guardar_video, eliminar_carpeta_reporte
+from helpers.storage_helper import guardar_video, guardar_metadatos, eliminar_carpeta_reporte
+from helpers.metadatos_helper import parsear_metadatos
 from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
 from helpers.pdf_generator_helper import generar_pdf_informe
 from services.notificacion_service import crear_notificacion
@@ -40,6 +41,7 @@ async def crear_reporte_service(
     titulo: str,
     comentario: str,
     archivos: list,
+    metadatos: str | None = None,
 ):
     try:
         total_actual = db.query(Reporte).filter(Reporte.usuario_id == usuario_id).count()
@@ -61,14 +63,28 @@ async def crear_reporte_service(
         db.add(nuevo_reporte)
         db.flush()
 
+        # Ubicación y hora de cada clip (opcional). Nunca hace fallar la creación.
+        datos_clips = parsear_metadatos(metadatos, len(archivos))
+
         for index, archivo in enumerate(archivos, start=1):
+            datos = datos_clips[index - 1]
             ruta_relativa = guardar_video(usuario_id, nuevo_reporte.id, index, archivo)
             video = VideoReporte(
                 reporte_id=nuevo_reporte.id,
                 video_path=ruta_relativa,
                 orden=index,
+                lat=datos["lat"],
+                lon=datos["lon"],
+                grabado_en=datos["grabado_en"],
             )
             db.add(video)
+
+            if datos["documento"] is not None:
+                try:
+                    guardar_metadatos(usuario_id, nuevo_reporte.id, index, datos["documento"])
+                except OSError as error:
+                    # El JSON es un respaldo para el dataset: si falla, el reporte se crea igual.
+                    print(f"No se pudo guardar el JSON del video {index}: {error}")
 
         db.commit()
         db.refresh(nuevo_reporte)
@@ -264,7 +280,8 @@ async def get_reporte_admin_service(db, reporte_id: int):
 
 async def validar_reporte_service(
     db, admin, reporte_id: int, severidad_validada: str,
-    infraccion_ids: list[int], infracciones_manuales: list[str], notas_admin: str | None,
+    infraccion_ids: list[int], infracciones_manuales: list[str],
+    patente_confirmada: str | None, notas_admin: str | None,
 ):
     try:
         reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
@@ -276,14 +293,12 @@ async def validar_reporte_service(
 
         infracciones = []
         if infraccion_ids:
-            infracciones += db.query(Infraccion).filter(Infraccion.id.in_(infraccion_ids)).all()
-        for texto in (infracciones_manuales or []):
-            manual = Infraccion(articulo="Manual", descripcion=texto)
-            db.add(manual)
-            db.flush()
-            infracciones.append(manual)
+            infracciones = db.query(Infraccion).filter(Infraccion.id.in_(infraccion_ids)).all()
 
         reporte.severidad_validada = severidad_validada
+        # Las infracciones manuales ya no se mezclan con el catálogo: van en el propio reporte.
+        reporte.infracciones_manuales = infracciones_manuales or []
+        reporte.patente_confirmada = patente_confirmada
         reporte.notas_admin = notas_admin
         reporte.infracciones = infracciones
         reporte.estado = EstadoReporte.aprobado
@@ -363,7 +378,13 @@ async def eliminar_reporte_admin_service(db, reporte_id: int):
 
 async def listar_infracciones_catalogo_service(db):
     try:
-        infracciones = db.query(Infraccion).order_by(Infraccion.id).all()
+        # Se excluyen las filas "Manual" que dejaba la versión anterior al validar.
+        infracciones = (
+            db.query(Infraccion)
+            .filter(Infraccion.articulo != "Manual")
+            .order_by(Infraccion.id)
+            .all()
+        )
         return [
             [{"id": i.id, "articulo": i.articulo, "descripcion": i.descripcion} for i in infracciones],
             None,

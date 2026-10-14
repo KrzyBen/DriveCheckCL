@@ -1,6 +1,7 @@
 import easyocr
 
 from analizadores.base import AnalizadorBase
+from patente_formato import normalizar_patente
 
 UMBRAL_CONFIANZA = 0.5
 
@@ -24,6 +25,14 @@ class AnalizadorPatente(AnalizadorBase):
     la patente, (2) se recorta esa zona de la imagen y se le pasa a
     EasyOCR para leer el texto. El modelo entrenado en Colab/Kaggle solo
     hace el paso 1; el paso 2 no se entrena, se usa tal cual.
+
+    El texto leido se normaliza y se valida contra los formatos de patente
+    chilenos (patente_formato.py).
+
+    Hallazgos posibles (de mayor a menor relevancia):
+      detectada      se leyo un texto (detalle.formato_valido dice si calza con un formato chileno)
+      sin_lectura    se encontro la patente pero el OCR no pudo leerla
+      sin_deteccion  no se encontro ninguna patente
     """
 
     nombre = "patente"
@@ -48,21 +57,40 @@ class AnalizadorPatente(AnalizadorBase):
                 mejor_recorte = recorte
 
         if mejor_recorte is None:
-            return {"resultado": "sin_deteccion", "confianza": 0.0, "texto": None}
+            return {"hallazgo": "sin_deteccion", "confianza": 0.0, "detalle": {"texto": None}}
 
         lector = _obtener_lector_ocr()
         lecturas = lector.readtext(mejor_recorte)
 
         if not lecturas:
-            return {"resultado": "deteccion_sin_lectura", "confianza": round(mejor_caja_confianza, 4), "texto": None}
+            return {
+                "hallazgo": "sin_lectura",
+                "confianza": round(mejor_caja_confianza, 4),
+                "detalle": {"texto": None},
+            }
 
         # EasyOCR puede devolver varios fragmentos de texto (ej. si separa
         # letras y numeros); se concatenan en el orden en que los detecto.
-        texto_completo = "".join(fragmento[1] for fragmento in lecturas).upper().replace(" ", "")
+        texto_leido = "".join(fragmento[1] for fragmento in lecturas)
         confianza_ocr = sum(fragmento[2] for fragmento in lecturas) / len(lecturas)
 
+        patente = normalizar_patente(texto_leido)
+        if patente["texto"] is None:
+            # El OCR devolvio solo signos o espacios: equivale a no haber leido nada.
+            return {
+                "hallazgo": "sin_lectura",
+                "confianza": round(mejor_caja_confianza, 4),
+                "detalle": {"texto": None},
+            }
+
         return {
-            "resultado": "detectada",
-            "texto": texto_completo,
+            "hallazgo": "detectada",
             "confianza": round(min(mejor_caja_confianza, confianza_ocr), 4),
+            "detalle": {
+                "texto": patente["texto"],
+                "formato_valido": patente["formato_valido"],
+                "formato": patente["formato"],
+                "texto_crudo": patente["texto_crudo"],
+                "correcciones": patente["correcciones"],
+            },
         }
