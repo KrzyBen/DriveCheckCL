@@ -19,6 +19,21 @@ const CAPAS_IA = {
   patente:      { label: 'Patente',      icon: IdCard },
 };
 
+// Textos para el contrato v1 de resultados_ia (ver backend-ia/src/contrato.py).
+const HALLAZGOS = {
+  posible_luz_roja: 'Posible luz roja',
+  senales_detectadas: 'Señales detectadas',
+  sin_evidencia: 'Sin evidencia',
+  detectada: 'Detectada',
+  sin_lectura: 'Sin lectura',
+  sin_deteccion: 'No detectada',
+};
+const ERRORES_CAPA = {
+  video_ilegible: 'No se pudo leer el video',
+  video_no_encontrado: 'Video no encontrado',
+  error_interno: 'Error interno del análisis',
+};
+
 const backendOrigin = import.meta.env.VITE_BASE_URL.replace(/\/api\/?$/, '');
 
 // Abre el punto del evento en OpenStreetMap (enlace externo, sin librerías de mapa).
@@ -49,6 +64,7 @@ const ReporteDetalle = () => {
   const [manualTexto, setManualTexto] = useState('');
   const [mostrarManual, setMostrarManual] = useState(false);
   const [notas, setNotas] = useState('');
+  const [patente, setPatente] = useState('');
   const [showRechazar, setShowRechazar] = useState(false);
   const [analizando, setAnalizando] = useState(false);
 
@@ -57,11 +73,12 @@ const ReporteDetalle = () => {
   useEffect(() => {
     if (!reporte) return;
     if (reporte.severidad_validada) setSeveridad(reporte.severidad_validada);
-    else if (reporte.validacion?.severidad_propuesta) setSeveridad(reporte.validacion.severidad_propuesta);
     if (reporte.notas_admin) setNotas(reporte.notas_admin);
-    if (reporte.infracciones?.length) {
-      setInfracciones(reporte.infracciones.map((i) => ({ tipo: 'catalogo', id: i.id, texto: `${i.articulo} - ${i.descripcion}` })));
-    }
+    // La IA solo precarga la patente si el admin no escribió una: no se pisa lo que ya hay en el campo.
+    if (reporte.patente_confirmada) setPatente((actual) => actual || reporte.patente_confirmada);
+    const delCatalogo = (reporte.infracciones || []).map((i) => ({ tipo: 'catalogo', id: i.id, texto: `${i.articulo} - ${i.descripcion}` }));
+    const manuales = (reporte.infracciones_manuales || []).map((texto) => ({ tipo: 'manual', texto }));
+    if (delCatalogo.length || manuales.length) setInfracciones([...delCatalogo, ...manuales]);
   }, [reporte]);
 
   // Mientras el análisis está en curso, consulta el reporte cada 3s hasta que
@@ -117,7 +134,8 @@ const ReporteDetalle = () => {
     const infraccion_ids = infracciones.filter((i) => i.tipo === 'catalogo').map((i) => i.id);
     const infracciones_manuales = infracciones.filter((i) => i.tipo === 'manual').map((i) => i.texto);
     const response = await handleValidar(reporte.id, {
-      severidad_validada: severidad, infraccion_ids, infracciones_manuales, notas_admin: notas || null,
+      severidad_validada: severidad, infraccion_ids, infracciones_manuales,
+      patente_confirmada: patente.trim() || null, notas_admin: notas || null,
     });
     if (response?.status === 'Success') navigate('/reportes');
   };
@@ -221,25 +239,35 @@ const ReporteDetalle = () => {
 
                 {validacion?.estado_analisis === 'error' && (
                   <p className="ia-error">
-                    No se pudo completar el análisis (backend-ia no respondió). Puedes reintentar.
+                    No se pudo completar el análisis. Puedes reintentar.
                   </p>
                 )}
 
                 {validacion?.resultados_ia && (
                   <div className="ia-list">
-                    {Object.entries(validacion.resultados_ia).map(([clave, valor]) => {
+                    {/* Contrato v1: { version, capas: { <capa>: {...} } }. Los reportes analizados antes traen las capas en la raíz. */}
+                    {Object.entries(validacion.resultados_ia.capas ?? validacion.resultados_ia).map(([clave, valor]) => {
                       const capa = CAPAS_IA[clave] || { label: clave, icon: Sparkles };
                       const Icono = capa.icon;
                       const confianza = valor?.confianza != null ? `${Math.round(valor.confianza * 100)}%` : null;
-                      const texto = valor?.texto || valor?.resultado || 'Sin datos';
-                      const esNeutro = valor?.resultado === 'sin_evidencia';
+                      const hallazgo = valor?.hallazgo ?? valor?.resultado;
+                      const detalle = valor?.detalle ?? {};
+                      const enError = valor?.estado === 'error';
+                      let texto;
+                      if (enError) texto = ERRORES_CAPA[valor.codigo] || 'Error en el análisis';
+                      else if (clave === 'patente' && (detalle.texto ?? valor?.texto)) {
+                        texto = `${detalle.texto ?? valor.texto}${detalle.formato_valido === false ? ' (formato no válido)' : ''}`;
+                      } else texto = HALLAZGOS[hallazgo] || hallazgo || 'Sin datos';
+                      const esNeutro = hallazgo === 'sin_evidencia';
+                      const clip = !enError && valor?.video ? ` · clip ${valor.video}` : '';
+                      const claseBadge = enError ? 'badge-red' : esNeutro ? 'badge-green' : clave === 'patente' ? 'badge-neutral' : 'badge-amber';
                       return (
                         <div key={clave} className="ia-row">
                           <span className="ia-row__label">
                             <Icono size={18} /> {capa.label}
                           </span>
-                          <span className={`badge ${esNeutro ? 'badge-green' : clave === 'patente' ? 'badge-neutral' : 'badge-amber'}`}>
-                            {texto}{confianza ? ` · ${confianza}` : ''}
+                          <span className={`badge ${claseBadge}`}>
+                            {texto}{confianza ? ` · ${confianza}` : ''}{clip}
                           </span>
                         </div>
                       );
@@ -264,6 +292,7 @@ const ReporteDetalle = () => {
                   {infracciones.map((i) => i.texto).join(' · ')}
                 </p>
               )}
+              {reporte.patente_confirmada && <p className="final__line">Patente: {reporte.patente_confirmada}</p>}
               {notas && <p className="final__line">Notas: {notas}</p>}
               {reporte.pdf_disponible && (
                 <a className="btn" href={`${backendOrigin}/storage/${reporte.pdf_path}`} target="_blank" rel="noreferrer">
@@ -277,15 +306,25 @@ const ReporteDetalle = () => {
                 <div className="panel__core">
                   <label className="field-label" htmlFor="severidad">
                     Severidad final
-                    {validacion?.severidad_propuesta && (
-                      <span className="field-label__hint"> · IA sugiere: {validacion.severidad_propuesta}</span>
-                    )}
                   </label>
                   <select id="severidad" value={severidad} onChange={(e) => setSeveridad(e.target.value)}>
                     <option value="leve">Leve</option>
                     <option value="moderada">Moderada</option>
                     <option value="grave">Grave</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel__core">
+                  <label className="field-label" htmlFor="patente">Patente del vehículo</label>
+                  <input
+                    id="patente"
+                    placeholder="Ej: BCDF12"
+                    maxLength={10}
+                    value={patente}
+                    onChange={(e) => setPatente(e.target.value.toUpperCase())}
+                  />
                 </div>
               </div>
 
