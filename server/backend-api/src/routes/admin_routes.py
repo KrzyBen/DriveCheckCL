@@ -3,6 +3,7 @@ from middlewares.authentication_middleware import authenticate_jwt
 from middlewares.authorization_middleware import is_admin
 from controllers.user_controller import create_user_admin, get_users, get_user, update_user, delete_user, get_perfil, update_perfil
 from routes.admin_reporte_routes import router as admin_reporte_router
+from routes.admin_mapa_routes import router as admin_mapa_router
 
 router = APIRouter()
 
@@ -20,3 +21,6 @@ router.add_api_route("/perfil", update_perfil, methods=["PATCH"], dependencies=[
 
 # Rutas de reportes, con su propio control de acceso definido en admin_reporte_routes.py
 router.include_router(admin_reporte_router, prefix="/reportes", tags=["Admin - Reportes"])
+
+# Mapa de riesgo: eventos aprobados agregados por celda y por hora (solo administrador)
+router.include_router(admin_mapa_router, prefix="/mapa", tags=["Admin - Mapa"])

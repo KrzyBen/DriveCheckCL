@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { FileText, Users, ArrowRight } from 'lucide-react';
 import { useAuth } from '@context/AuthContext';
+import MapaRiesgo from '@components/MapaRiesgo';
 
 const Home = () => {
   const { user } = useAuth();
   const rol = user?.rol;
   const puedeReportes = rol === 'administrador' || rol === 'validador';
   const puedeUsuarios = rol === 'administrador';
+  const puedeMapa = rol === 'administrador'; // el endpoint del mapa es solo para administrador
 
   return (
     <div className="home page-enter">
@@ -50,6 +52,8 @@ const Home = () => {
           </Link>
         )}
       </div>
+
+      {puedeMapa && <MapaRiesgo />}
     </div>
   );
 };
