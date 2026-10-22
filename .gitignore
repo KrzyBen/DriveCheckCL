@@ -1,2 +1,6 @@
 .env
 /server/frontend/node_modules
+ 
+# Datos de usuarios y dataset: nunca al repositorio
+/server/storage/*
+!/server/storage/Leeme.txt

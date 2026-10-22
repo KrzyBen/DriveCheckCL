@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from config.configDb import get_db
 from controllers.auth_controller import login, register, logout, forgot_password, reset_password
 from controllers.notificacion_controller import listar_notificaciones, marcar_notificaciones_leidas
+from controllers.consentimiento_controller import obtener_consentimiento, guardar_consentimiento
 from routes.reporte_routes import router as reporte_router
 
 router = APIRouter()
@@ -17,6 +18,10 @@ router.add_api_route("/reset-password",   reset_password,   methods=["POST"])
 #Rutas de notificaciones
 router.add_api_route("/notificaciones",              listar_notificaciones,          methods=["GET"])
 router.add_api_route("/notificaciones/marcar-leidas", marcar_notificaciones_leidas,  methods=["PATCH"])
+
+#Rutas de consentimiento (uso de datos en el estudio)
+router.add_api_route("/consentimiento",              obtener_consentimiento,         methods=["GET"])
+router.add_api_route("/consentimiento",              guardar_consentimiento,         methods=["PUT"])
 
 #Rutas de uso
 #Añadir funciones de [Traer datos de usuario, traer reportes si es que hay

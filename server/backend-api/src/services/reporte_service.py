@@ -11,7 +11,7 @@ from helpers.pdf_generator_helper import generar_pdf_informe
 from services.notificacion_service import crear_notificacion
 
 MAX_REPORTES_POR_USUARIO = 10
-DIAS_MINIMOS_ELIMINACION = 60
+DIAS_MINIMOS_ELIMINACION = 7
 
 # Un análisis que lleva más que esto sin novedades se considera estancado
 # (backend-ia caído o callback perdido) y se permite relanzarlo.

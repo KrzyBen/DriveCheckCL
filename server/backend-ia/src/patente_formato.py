@@ -1,9 +1,3 @@
-"""
-Normalizacion y validacion de patentes chilenas leidas por OCR.
-
-Sin dependencias pesadas para poder probarse solo. Los formatos validos estan
-en FORMATOS: si hay que agregar o corregir uno, se hace solo ahi.
-"""
 import re
 
 # Letras que usan las patentes actuales de auto (sin vocales ni M, N, Ñ, Q).
