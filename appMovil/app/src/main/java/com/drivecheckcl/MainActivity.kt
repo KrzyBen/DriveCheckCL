@@ -16,6 +16,7 @@ import com.drivecheckcl.feature.auth.ForgotPasswordScreen
 import com.drivecheckcl.feature.auth.LoginScreen
 import com.drivecheckcl.feature.auth.RegisterScreen
 import com.drivecheckcl.feature.auth.SessionManager
+import com.drivecheckcl.feature.consentimiento.ConsentimientoScreen
 import com.drivecheckcl.feature.dashcam.DashcamScreen
 import com.drivecheckcl.feature.files.MyFilesScreen
 import com.drivecheckcl.feature.home.HomeScreen
@@ -67,7 +68,7 @@ class MainActivity : ComponentActivity() {
 fun DriveCheckApp() {
     val context = LocalContext.current
     var currentScreen by remember {
-        mutableStateOf(if (SessionManager.verificarSesion(context)) Screen.HOME else Screen.LOGIN)
+        mutableStateOf(if (SessionManager.verificarSesion(context)) Screen.CONSENTIMIENTO else Screen.LOGIN)
     }
 
     var loginInfoMessage by remember { mutableStateOf<String?>(null) }
@@ -85,7 +86,7 @@ fun DriveCheckApp() {
         Screen.LOGIN -> LoginScreen(
             onLoginSuccess = {
                 loginInfoMessage = null
-                currentScreen = Screen.HOME
+                currentScreen = Screen.CONSENTIMIENTO
             },
             onGoToRegister = {
                 loginInfoMessage = null
@@ -110,6 +111,9 @@ fun DriveCheckApp() {
                 loginInfoMessage = "Contraseña actualizada. Inicia sesión con tu nueva contraseña."
                 currentScreen = Screen.LOGIN
             }
+        )
+        Screen.CONSENTIMIENTO -> ConsentimientoScreen(
+            onContinuar = { currentScreen = Screen.HOME }
         )
         Screen.HOME -> HomeScreen(
             userName          = SessionManager.obtenerNombreUsuario(context),

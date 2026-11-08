@@ -21,6 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.drivecheckcl.data.model.PerfilData
 import com.drivecheckcl.feature.auth.SessionManager
+import com.drivecheckcl.feature.consentimiento.ConsentimientoViewModel
 import com.drivecheckcl.feature.settings.components.SettingsGroup
 import com.drivecheckcl.feature.settings.components.SettingsRowNav
 import com.drivecheckcl.feature.settings.components.SettingsRowToggle
@@ -44,7 +45,8 @@ private fun inicialesDe(nombre: String): String {
 fun SettingsScreen(
     onBack:   () -> Unit,
     onLogout: () -> Unit,
-    perfilViewModel: PerfilViewModel = viewModel()
+    perfilViewModel: PerfilViewModel = viewModel(),
+    consentimientoViewModel: ConsentimientoViewModel = viewModel()
 ) {
     val context = LocalContext.current
     // Versión instalada, leída del propio paquete.
@@ -59,6 +61,7 @@ fun SettingsScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showEditProfile  by remember { mutableStateOf(false) }
     var showQualitySheet by remember { mutableStateOf(false) }
+    var showConsentimientoSheet by remember { mutableStateOf(false) }
 
     // Snapshot estable del perfil para mostrar en pantalla, separado del
     // uiState transitorio (que además maneja Loading/Saving/Error).
@@ -68,6 +71,15 @@ fun SettingsScreen(
     val uiState by perfilViewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) { perfilViewModel.cargarPerfil() }
+
+    val consentimiento by consentimientoViewModel.estado.collectAsStateWithLifecycle()
+    val guardandoConsentimiento by consentimientoViewModel.guardando.collectAsStateWithLifecycle()
+    val errorConsentimiento by consentimientoViewModel.error.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        consentimientoViewModel.limpiarError()
+        consentimientoViewModel.cargarEstado()
+    }
 
     LaunchedEffect(uiState) {
         when (val s = uiState) {
@@ -133,6 +145,19 @@ fun SettingsScreen(
                 AppPreferences.guardarCalidadGrabacion(context, it)
             },
             onDismiss = { showQualitySheet = false }
+        )
+    }
+
+    if (showConsentimientoSheet) {
+        ConsentimientoSheet(
+            estado    = consentimiento,
+            guardando = guardandoConsentimiento,
+            error     = errorConsentimiento,
+            onCambiar = { consentimientoViewModel.guardar(it) },
+            onDismiss = {
+                showConsentimientoSheet = false
+                consentimientoViewModel.limpiarError()
+            }
         )
     }
 
@@ -239,6 +264,20 @@ fun SettingsScreen(
                         notifResultados = it
                         AppPreferences.guardarNotificacionesResultados(context, it)
                     }
+                )
+            }
+
+            // Privacidad
+            SectionLabel("PRIVACIDAD")
+            SettingsGroup {
+                SettingsRowNav(
+                    icon     = Icons.Default.Lock,
+                    iconBg   = SuccessGreen,
+                    title    = "Privacidad y datos",
+                    subtitle = consentimiento?.let {
+                        if (it.aceptoEstudio) "Uso en estudio: autorizado" else "Uso en estudio: no autorizado"
+                    } ?: "Aviso y uso en estudio",
+                    onClick  = { showConsentimientoSheet = true }
                 )
             }
 
