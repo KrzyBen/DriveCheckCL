@@ -24,6 +24,7 @@ def init_db():
         from entity.reporte_validacion_entity import ReporteValidacion
         from entity.password_reset_entity import PasswordResetCode
         from entity.notificacion_entity import Notificacion
+        from entity.dataset_clip_entity import DatasetClip
         Base.metadata.create_all(bind=engine)
         print("=> Conexión exitosa a la base de datos!")
     except Exception as error:

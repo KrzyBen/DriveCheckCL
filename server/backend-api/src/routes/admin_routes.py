@@ -4,6 +4,7 @@ from middlewares.authorization_middleware import is_admin
 from controllers.user_controller import create_user_admin, get_users, get_user, update_user, delete_user, get_perfil, update_perfil
 from routes.admin_reporte_routes import router as admin_reporte_router
 from routes.admin_mapa_routes import router as admin_mapa_router
+from routes.admin_dataset_routes import router as admin_dataset_router
 
 router = APIRouter()
 
@@ -24,3 +25,6 @@ router.include_router(admin_reporte_router, prefix="/reportes", tags=["Admin - R
 
 # Mapa de riesgo: eventos aprobados agregados por celda y por hora (solo administrador)
 router.include_router(admin_mapa_router, prefix="/mapa", tags=["Admin - Mapa"])
+
+# Dataset: resumen, curación de etiquetas por clip, exportación y descarga (solo administrador)
+router.include_router(admin_dataset_router, prefix="/dataset", tags=["Admin - Dataset"])

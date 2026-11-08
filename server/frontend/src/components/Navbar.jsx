@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { logout } from '@services/auth.service.js';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@context/AuthContext';
-import { Menu, X, Home, Users, FileText, User, LogOut } from 'lucide-react';
+import { Menu, X, Home, Users, FileText, Database, User, LogOut } from 'lucide-react';
 import '@styles/navbar.css';
 
 const iniciales = (nombre = '') =>
@@ -73,6 +73,11 @@ const Navbar = () => {
               {(userRole === 'administrador' || userRole === 'validador') && (
                 <NavLink to="/reportes" className="drawer-item" onClick={closeMenu}>
                   <FileText size={18} /> Reportes
+                </NavLink>
+              )}
+              {userRole === 'administrador' && (
+                <NavLink to="/dataset" className="drawer-item" onClick={closeMenu}>
+                  <Database size={18} /> Dataset
                 </NavLink>
               )}
               <div className="drawer-divider" role="separator" />

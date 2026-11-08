@@ -5,6 +5,7 @@ import Home from '@pages/Home';
 import Usuarios from '@pages/Usuarios';
 import Reportes from '@pages/Reportes';
 import ReporteDetalle from '@pages/ReporteDetalle';
+import Dataset from '@pages/Dataset';
 import Perfil from '@pages/Perfil';
 import Error404 from '@pages/Error404';
 import Root from '@pages/Root';
@@ -41,6 +42,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute allowedRoles={['administrador', 'validador']}>
             <ReporteDetalle />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/dataset',
+        element: (
+          <ProtectedRoute allowedRoles={['administrador']}>
+            <Dataset />
           </ProtectedRoute>
         ),
       },

@@ -8,8 +8,8 @@ from config.configEnv import HOST, PORT, CORS_ORIGINS
 from routes.index_routes import router
 
 import os
-from fastapi.staticfiles import StaticFiles
 from config.configEnv import STORAGE_PATH
+from helpers.storage_static import StorageFiles
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,7 +33,7 @@ app.add_middleware(
 app.include_router(router, prefix="/api")
 
 os.makedirs(STORAGE_PATH, exist_ok=True)
-app.mount("/storage", StaticFiles(directory=STORAGE_PATH), name="storage")
+app.mount("/storage", StorageFiles(directory=STORAGE_PATH), name="storage")
 
 
 @app.get("/health")
