@@ -249,6 +249,40 @@ def pruebas_exportacion(storage):
     comprobar(all(not r["anonimizado"] and r["archivo"] is None for r in metadata(destino)),
               "registros con anonimizado=false y archivo=null")
 
+    print("== 9b. Aviso de progreso (al_avanzar) ==")
+    avisos = []
+    ds.exportar_dataset(None, destino, AnonimizadorFalso(), SECRETO,
+                        al_avanzar=lambda a, t, c: avisos.append((a, t, c)))
+    comprobar(avisos == [(1, 4, "clip_000001_1"), (2, 4, "clip_000001_2"),
+                         (3, 4, "clip_000002_1"), (4, 4, "clip_000003_1")],
+              "se llama antes de cada clip con (actual, total, clip_id)")
+    # Un clip sin archivo en disco no cuenta en el total
+    ruta_r3 = os.path.join(storage, "usuario_1/reporte_3/video_1.mp4")
+    os.rename(ruta_r3, ruta_r3 + ".aparte")
+    avisos.clear()
+    ds.exportar_dataset(None, destino, AnonimizadorFalso(), SECRETO,
+                        al_avanzar=lambda a, t, c: avisos.append((a, t, c)))
+    os.rename(ruta_r3 + ".aparte", ruta_r3)
+    comprobar([t for _, t, _ in avisos] == [3, 3, 3] and len(avisos) == 3, "el total solo cuenta clips con archivo")
+    avisos.clear()
+    ds.exportar_dataset(None, destino, None, SECRETO, al_avanzar=lambda a, t, c: avisos.append((a, t, c)))
+    comprobar(avisos == [], "sin anonimizador no se llama")
+
+    print("== 9c. Mensajes del script de consola ==")
+    import contextlib
+    import io
+    import exportar_dataset as script
+    salida = io.StringIO()
+    falso = AnonimizadorFalso({"usuario_1/reporte_1/video_2.mp4": AnonimizacionFallida("tiempo_agotado")})
+    with contextlib.redirect_stdout(salida):
+        ds.exportar_dataset(None, destino, script.con_reporte(falso), SECRETO, al_avanzar=script.al_avanzar)
+    lineas = salida.getvalue().splitlines()
+    comprobar(lineas[0].startswith("  Anonimizando clip 1 de 4 (clip_000001_1)... listo en ")
+              and lineas[0].endswith(" s"), f"éxito: {lineas[0].strip()!r}")
+    comprobar(lineas[1] == "  Anonimizando clip 2 de 4 (clip_000001_2)... omitido (tiempo_agotado)",
+              f"omisión: {lineas[1].strip()!r}")
+    ds.exportar_dataset(None, destino, AnonimizadorFalso(), SECRETO)   # deja el dataset completo
+
     print("== 10. Las carpetas de trabajo no se sirven por /storage ==")
     nombres = {os.path.basename(destino) + s for s in (ds.SUFIJO_NUEVO, ds.SUFIJO_ANTERIOR, ds.SUFIJO_LOCK)}
     comprobar(nombres <= set(storage_static.CARPETAS_PRIVADAS), f"{sorted(nombres)} son privadas")

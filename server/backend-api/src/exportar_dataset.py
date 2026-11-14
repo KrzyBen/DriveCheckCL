@@ -11,10 +11,35 @@ disponible o fallan todos, la exportación se aborta y el dataset anterior queda
 """
 import argparse
 import sys
+import time
 
 from config.configDb import SessionLocal, init_db
-from helpers.anonimizador_client import ClienteAnonimizador
+from helpers.anonimizador_client import AnonimizacionFallida, ClienteAnonimizador, ServicioNoDisponible
 from services.dataset_service import ExportacionAbortada, ExportacionEnCurso, exportar_dataset
+
+
+def al_avanzar(actual: int, total: int, clip_id: str) -> None:
+    # end="" y flush: el resultado ("listo en X s" u omisión) se completa en la misma línea
+    print(f"  Anonimizando clip {actual} de {total} ({clip_id})...", end="", flush=True)
+
+
+def con_reporte(anonimizador):
+    """Envuelve al anonimizador para imprimir cuánto tardó cada clip o por qué se omitió."""
+    def anonimizar(video_path, destino, patente_evento=None):
+        inicio = time.monotonic()
+        try:
+            anonimizador(video_path, destino, patente_evento)
+        except AnonimizacionFallida as error:
+            print(f" omitido ({error.motivo})", flush=True)
+            raise
+        except ServicioNoDisponible as error:
+            print(f" backend-ia no disponible ({error.motivo})", flush=True)
+            raise
+        except BaseException:
+            print(" error", flush=True)
+            raise
+        print(f" listo en {time.monotonic() - inicio:.1f} s", flush=True)
+    return anonimizar
 
 
 def main():
@@ -29,7 +54,10 @@ def main():
     db = SessionLocal()
     anonimizador = None if args.sin_videos else ClienteAnonimizador()
     try:
-        r = exportar_dataset(db, anonimizador=anonimizador)
+        if anonimizador is None:
+            r = exportar_dataset(db)
+        else:
+            r = exportar_dataset(db, anonimizador=con_reporte(anonimizador), al_avanzar=al_avanzar)
     except ExportacionEnCurso as error:
         print(f"No se exportó: {error}")
         sys.exit(1)

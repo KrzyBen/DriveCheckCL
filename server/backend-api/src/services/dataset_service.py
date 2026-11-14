@@ -30,6 +30,10 @@ PREFIJO_PRUEBA = "[PRUEBA]"  # el mismo que usa seed_eventos_prueba.py
 # copia ningún video: un video sin anonimizar nunca llega a clips/.
 Anonimizador = Callable[[str, str, Optional[str]], None]
 
+# Aviso de progreso: (clip actual desde 1, total de clips a anonimizar, clip_id) -> None.
+# Se llama justo antes de anonimizar cada clip; solo cuando hay anonimizador.
+AlAvanzar = Callable[[int, int, str], None]
+
 # La exportación se arma en <destino>.nuevo y al terminar reemplaza a <destino>; durante el
 # cambio el anterior pasa un instante por <destino>.anterior. <destino>.lock evita que dos
 # exportaciones (panel y script de consola) trabajen a la vez. Los tres son privados en
@@ -109,11 +113,13 @@ def leer_exportados(destino: Optional[str] = None):
 
 def exportar_dataset(db: Session, destino: Optional[str] = None,
                      anonimizador: Optional[Anonimizador] = None,
-                     secreto: Optional[str] = None) -> dict:
+                     secreto: Optional[str] = None,
+                     al_avanzar: Optional[AlAvanzar] = None) -> dict:
     """
     Reconstruye por completo <storage>/dataset/ (metadata.jsonl, README.md, resumen.json y clips/).
     Cada corrida parte de cero: quien revocó su consentimiento desaparece del dataset, y los
     clips excluidos a mano no entran. Devuelve un resumen con conteos y motivos de exclusión.
+    al_avanzar (opcional) se llama antes de anonimizar cada clip con (actual, total, clip_id).
 
     Todo se arma en <destino>.nuevo y solo al final reemplaza a <destino>: si la exportación
     se aborta o se corta (reinicio del contenedor), el dataset anterior queda intacto.
@@ -130,7 +136,7 @@ def exportar_dataset(db: Session, destino: Optional[str] = None,
         nuevo = destino + SUFIJO_NUEVO
         os.makedirs(os.path.join(nuevo, "clips"))
         try:
-            resumen = _generar(db, nuevo, anonimizador, secreto)
+            resumen = _generar(db, nuevo, anonimizador, secreto, al_avanzar)
         except BaseException:
             # Abortada o con un error inesperado: se descarta lo armado, el anterior no se tocó
             shutil.rmtree(nuevo, ignore_errors=True)
@@ -141,10 +147,29 @@ def exportar_dataset(db: Session, destino: Optional[str] = None,
     return resumen
 
 
-def _generar(db: Session, carpeta: str, anonimizador: Optional[Anonimizador], secreto: str) -> dict:
+def _clip_disponible(video, fila) -> Optional[str]:
+    """Por qué un clip de un reporte elegible no entra ("excluido", "sin_archivo") o None si entra."""
+    if fila is not None and fila.excluido:
+        return "excluido"
+    if not os.path.isfile(get_ruta_absoluta(video.video_path)):
+        return "sin_archivo"
+    return None
+
+
+def _generar(db: Session, carpeta: str, anonimizador: Optional[Anonimizador], secreto: str,
+             al_avanzar: Optional[AlAvanzar] = None) -> dict:
     """Escribe el dataset completo en `carpeta` (vacía, con clips/) y devuelve el resumen."""
     carpeta_clips = os.path.join(carpeta, "clips")
     filas = filas_por_video(db)
+    reportes = reportes_con_todo(db)
+    # Total para el aviso de progreso: los clips que de verdad se van a anonimizar, con la
+    # misma regla del recorrido de abajo (_clip_disponible)
+    total_a_anonimizar = 0
+    if anonimizador is not None and al_avanzar is not None:
+        total_a_anonimizar = sum(
+            1 for r in reportes if motivo_exclusion(r) is None
+            for v in r.videos if _clip_disponible(v, filas.get(v.id)) is None
+        )
     excluidos = {"no_aprobado": 0, "prueba": 0, "sin_consentimiento": 0, "sin_video": 0}
     registros = []
     sin_anonimizar = 0
@@ -153,7 +178,7 @@ def _generar(db: Session, carpeta: str, anonimizador: Optional[Anonimizador], se
     omitidos = []           # [{"clip_id", "motivo"}] de los que fallaron
     fallos_seguidos = 0     # se reinicia con cada clip anonimizado con éxito
 
-    for reporte in reportes_con_todo(db):
+    for reporte in reportes:
         motivo = motivo_exclusion(reporte)
         if motivo:
             excluidos[motivo] += 1
@@ -168,12 +193,12 @@ def _generar(db: Session, carpeta: str, anonimizador: Optional[Anonimizador], se
 
         for video in sorted(reporte.videos, key=lambda v: v.orden):
             fila = filas.get(video.id)
-            if fila is not None and fila.excluido:
+            disponible = _clip_disponible(video, fila)
+            if disponible == "excluido":
                 clips_excluidos += 1
                 hubo_excluidos = True
                 continue
-            origen = get_ruta_absoluta(video.video_path)
-            if not os.path.isfile(origen):
+            if disponible == "sin_archivo":
                 continue
             documento = h.leer_metadatos_clip(get_ruta_absoluta(h.ruta_json_de(video.video_path)))
             severidad, infracciones, _ = h.etiquetas_efectivas(reporte, fila)
@@ -185,6 +210,8 @@ def _generar(db: Session, carpeta: str, anonimizador: Optional[Anonimizador], se
                 sin_anonimizar += 1
             else:
                 candidatos += 1
+                if al_avanzar is not None:
+                    al_avanzar(candidatos, total_a_anonimizar, registro["clip_id"])
                 nombre = f"{registro['clip_id']}.mp4"
                 try:
                     anonimizador(video.video_path, os.path.join(carpeta_clips, nombre), patente_evento)
