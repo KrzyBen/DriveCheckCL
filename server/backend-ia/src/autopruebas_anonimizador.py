@@ -148,6 +148,28 @@ def main():
             except an.ModeloNoDisponible:
                 comprobar(True, f"ModeloNoDisponible con {os.path.basename(ruta)}")
 
+        print("== 7. Enderezar frames según el metadato de rotación ==")
+        # Frame sintético de 4 filas x 6 columnas con un único píxel marcado en la
+        # esquina superior izquierda. Para cada rotación se espera:
+        #   (dimensiones alto x ancho, posición (fila, columna) del píxel marcado)
+        sintetico = np.zeros((4, 6, 3), dtype=np.uint8)
+        sintetico[0, 0] = 255
+        esperados = {
+            0:   ((4, 6), (0, 0)),   # sin giro
+            90:  ((6, 4), (0, 3)),   # horario: la esquina sup. izquierda pasa a la sup. derecha
+            180: ((4, 6), (3, 5)),   # media vuelta: pasa a la esquina inf. derecha
+            270: ((6, 4), (5, 0)),   # antihorario: pasa a la esquina inf. izquierda
+        }
+        for rotacion, (dimensiones, posicion) in esperados.items():
+            girado = an._enderezar(sintetico, rotacion)
+            marcados = [tuple(int(v) for v in p) for p in np.argwhere(girado[:, :, 0] == 255)]
+            comprobar(girado.shape[:2] == dimensiones and marcados == [posicion],
+                      f"rotación {rotacion}: {girado.shape[1]}x{girado.shape[0]}, píxel en {marcados}")
+        comprobar(an._enderezar(sintetico, 0) is sintetico, "rotación 0 devuelve el mismo frame sin copiarlo")
+        captura, rotacion = an._abrir_video(origen)
+        captura.release()
+        comprobar(rotacion == 0, "un video sin metadato de rotación se lee con rotación 0")
+
     print("\nTODO OK" if not FALLOS else f"\nFALLARON {len(FALLOS)}: {FALLOS}")
     sys.exit(1 if FALLOS else 0)
 

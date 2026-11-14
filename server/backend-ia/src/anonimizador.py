@@ -1,9 +1,12 @@
+import logging
 import os
 import time
 
 import cv2
 
 from patente_formato import normalizar_patente
+
+logger = logging.getLogger(__name__)
 
 # Umbrales BAJOS a propósito: para difuminar importa el recall, no la precisión.
 UMBRAL_ROSTROS = 0.3
@@ -105,6 +108,48 @@ def _asociar(tracks, caja, frame, ya_usados, max_hueco, iou_min=0.3):
     return mejor
 
 
+# ── rotación ───────────────────────────────────────────────────────────────
+
+# Rotación del metadato (grados en sentido horario) -> giro que endereza el frame
+_GIROS = {
+    90: cv2.ROTATE_90_CLOCKWISE,
+    180: cv2.ROTATE_180,
+    270: cv2.ROTATE_90_COUNTERCLOCKWISE,
+}
+
+
+def _abrir_video(origen):
+    """
+    Abre el video con la rotación automática desactivada y devuelve (captura, rotación).
+    Los clips de Android vienen como 1280x720 con metadato de rotación 90°: OpenCV no
+    siempre endereza esos frames, así que se hace a mano con _enderezar para que el
+    resultado no dependa de la versión ni del backend de OpenCV.
+    """
+    captura = cv2.VideoCapture(origen)
+    if not captura.isOpened():
+        captura.release()
+        raise IOError(f"No se pudo abrir el video: {origen}")
+
+    # Si el backend no acepta desactivarla, se sigue igual pero queda registrado:
+    # en ese caso podría enderezarse dos veces y conviene saberlo al revisar el resultado
+    if not captura.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0):
+        logger.warning("No se pudo desactivar la rotación automática al abrir %s", origen)
+
+    # El metadato puede venir como 90.0 o -90; se normaliza a 0, 90, 180 o 270
+    rotacion = int(round(captura.get(cv2.CAP_PROP_ORIENTATION_META))) % 360
+    if rotacion not in (0, *_GIROS):
+        logger.warning("Rotación %s no soportada en %s; se trata como 0", rotacion, origen)
+        rotacion = 0
+    return captura, rotacion
+
+
+def _enderezar(frame, rotacion):
+    """Gira el frame según el metadato de rotación. Con rotación 0 lo devuelve sin tocar."""
+    if rotacion == 0:
+        return frame
+    return cv2.rotate(frame, _GIROS[rotacion])
+
+
 # ── núcleo ─────────────────────────────────────────────────────────────────
 
 def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
@@ -114,35 +159,41 @@ def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
     placas.detectar(frame)  -> [(x1, y1, x2, y2)]
     lector(frame, caja)     -> texto leído o None
     Devuelve estadísticas para revisar el resultado a ojo.
+    Los frames se enderezan según el metadato de rotación antes de detectar y de
+    escribir, así que el video de salida queda derecho y sin metadato de rotación.
     """
     inicio = time.time()
-    captura = cv2.VideoCapture(origen)
-    if not captura.isOpened():
-        raise IOError(f"No se pudo abrir el video: {origen}")
-    ancho = int(captura.get(cv2.CAP_PROP_FRAME_WIDTH))
-    alto = int(captura.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    captura, rotacion = _abrir_video(origen)
     fps = captura.get(cv2.CAP_PROP_FPS) or 30.0
+    # El tamaño se toma del primer frame YA enderezado (no de CAP_PROP_FRAME_WIDTH/HEIGHT,
+    # que describen el frame sin girar)
+    ancho = alto = None
 
     # Pasada 1: detectar y leer placas por tramo
     tracks, caras = [], []   # caras: (frame, caja)
     total, indice = 0, 0
-    while True:
-        ok, frame = captura.read()
-        if not ok:
-            break
-        total += 1
-        if indice % paso == 0:
-            for caja in rostros.detectar(frame):
-                caras.append((indice, caja))
-            usados = set()
-            for caja in placas.detectar(frame):
-                t = _asociar(tracks, caja, indice, usados, max_hueco=paso * 4)
-                if t.lecturas < MAX_LECTURAS_POR_TRACK and not t.es_evento:
-                    t.lecturas += 1
-                    if coincide_con_evento(lector(frame, caja), patente_evento):
-                        t.es_evento = True
-        indice += 1
-    captura.release()
+    try:
+        while True:
+            ok, frame = captura.read()
+            if not ok:
+                break
+            frame = _enderezar(frame, rotacion)
+            if total == 0:
+                alto, ancho = frame.shape[:2]
+            total += 1
+            if indice % paso == 0:
+                for caja in rostros.detectar(frame):
+                    caras.append((indice, caja))
+                usados = set()
+                for caja in placas.detectar(frame):
+                    t = _asociar(tracks, caja, indice, usados, max_hueco=paso * 4)
+                    if t.lecturas < MAX_LECTURAS_POR_TRACK and not t.es_evento:
+                        t.lecturas += 1
+                        if coincide_con_evento(lector(frame, caja), patente_evento):
+                            t.es_evento = True
+            indice += 1
+    finally:
+        captura.release()
     if total == 0:
         raise IOError(f"El video no tiene frames legibles: {origen}")
 
@@ -165,29 +216,44 @@ def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
         for f, caja in t.detecciones:
             cubrir(f, caja, FACTOR_PLACA)
 
-    # Pasada 2: reescribir el video (sin audio) con las cajas difuminadas
+    # Pasada 2: reescribir el video (sin audio) con las cajas difuminadas, con los frames
+    # ya derechos y del tamaño del primer frame enderezado
     os.makedirs(os.path.dirname(os.path.abspath(destino)), exist_ok=True)
     temporal = destino + ".tmp.mp4"
     salida = cv2.VideoWriter(temporal, cv2.VideoWriter_fourcc(*"mp4v"), fps, (ancho, alto))
-    if not salida.isOpened():
-        raise IOError("No se pudo crear el video de salida (codec mp4v no disponible)")
-    captura = cv2.VideoCapture(origen)
-    escritos = 0
+    captura = None
+    completo = False
     try:
+        if not salida.isOpened():
+            raise IOError("No se pudo crear el video de salida (codec mp4v no disponible)")
+        captura, rotacion = _abrir_video(origen)
+        escritos = 0
         for indice in range(total):
             ok, frame = captura.read()
             if not ok:
                 break
+            frame = _enderezar(frame, rotacion)
+            # VideoWriter descarta en silencio los frames de otro tamaño: mejor fallar
+            if frame.shape[:2] != (alto, ancho):
+                raise IOError(
+                    f"El frame {indice} mide {frame.shape[1]}x{frame.shape[0]} y el video "
+                    f"{ancho}x{alto}: no se guarda el video"
+                )
             for caja in por_frame.get(indice, ()):
                 desenfocar(frame, caja)
             salida.write(frame)
             escritos += 1
+        if escritos != total:
+            raise IOError(f"Se leyeron {escritos} de {total} frames: no se guarda el video")
+        completo = True
     finally:
-        captura.release()
+        # Se liberan lector y escritor siempre, y ante cualquier error se borra el
+        # temporal para no dejar un video a medio escribir
+        if captura is not None:
+            captura.release()
         salida.release()
-    if escritos != total:
-        os.remove(temporal)
-        raise IOError(f"Se leyeron {escritos} de {total} frames: no se guarda el video")
+        if not completo and os.path.exists(temporal):
+            os.remove(temporal)
     os.replace(temporal, destino)
 
     return {
