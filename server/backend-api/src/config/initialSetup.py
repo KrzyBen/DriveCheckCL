@@ -17,21 +17,21 @@ async def create_users():
         users_to_create = [
             {
                 "nombre_completo": "Administrador DriveCheckCL",
-                "rut": "21.308.770-3",
+                "rut": "11.111.111-1",
                 "email": "admin@drivecheckcl.cl",
                 "password": await encrypt_password("Admin1234"),
                 "rol": "administrador",
             },
             {
                 "nombre_completo": "Validador DriveCheckCL",
-                "rut": "22.111.222-1",
+                "rut": "22.222.222-2",
                 "email": "validador@drivecheckcl.cl",
                 "password": await encrypt_password("Valid1234"),
                 "rol": "validador",
             },
             {
                 "nombre_completo": "Usuario Prueba",
-                "rut": "20.630.735-8",
+                "rut": "12.345.678-5",
                 "email": "usuario@drivecheckcl.cl",
                 "password": await encrypt_password("User1234"),
                 "rol": "conductor",

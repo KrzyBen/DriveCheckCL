@@ -34,7 +34,7 @@ export default function UsuarioPopup({ show, setShow, data, action, mode = 'edit
       label: 'RUT',
       name: 'rut',
       defaultValue: userData.rut || '',
-      placeholder: '21.308.770-3',
+      placeholder: '12.345.678-5',
       fieldType: 'input',
       type: 'text',
       required: true,
