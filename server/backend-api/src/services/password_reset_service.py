@@ -1,4 +1,4 @@
-import random
+import secrets
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -11,7 +11,8 @@ from config.configEnv import PASSWORD_RESET_CODE_EXPIRE_MINUTES
 
 
 def _generar_codigo() -> str:
-    return f"{random.randint(0, 999999):06d}"
+    # Usa un generador criptográficamente seguro para que el código no sea predecible
+    return f"{secrets.randbelow(1000000):06d}"
 
 
 async def request_password_reset_service(db: Session, email: str):

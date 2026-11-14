@@ -1,4 +1,5 @@
 import smtplib
+import ssl
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
@@ -21,6 +22,7 @@ async def send_email(to: str, subject: str, body: str) -> None:
     message.attach(MIMEText(body, "plain"))
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
+        # Verifica el certificado y el nombre del servidor SMTP antes de enviar credenciales
+        server.starttls(context=ssl.create_default_context())
         server.login(SMTP_USER, SMTP_PASSWORD)
         server.sendmail(SMTP_USER, to, message.as_string())
