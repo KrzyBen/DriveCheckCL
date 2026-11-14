@@ -14,7 +14,9 @@ class User(Base):
 
     email = Column(String(255), nullable=False, unique=True, index=True)
 
-    rol = Column(String(50), nullable=False, default="usuario")
+    # Rol por defecto "conductor": coincide con los roles válidos del sistema
+    # (administrador, validador, conductor) definidos en user_validation.py.
+    rol = Column(String(50), nullable=False, default="conductor")
 
     password = Column(String(255), nullable=False)
 
