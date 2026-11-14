@@ -1,5 +1,6 @@
 import re
 from pydantic import BaseModel, EmailStr, field_validator
+from helpers.rut_helper import normalizar_rut
 
 
 class LoginValidation(BaseModel):
@@ -43,12 +44,11 @@ class RegisterValidation(BaseModel):
     @field_validator("rut")
     @classmethod
     def validate_rut(cls, v):
-        pattern = r'^(?:(?:[1-9]\d{0}|[1-2]\d{1})(\.\d{3}){2}|[1-9]\d{6}|[1-2]\d{7}|29\.999\.999|29999999)-[\dkK]$'
-        if not re.match(pattern, v):
-            raise ValueError("Formato rut inválido, debe ser xx.xxx.xxx-x o xxxxxxxx-x.")
+        # Valida formato y dígito verificador, y guarda siempre el formato xx.xxx.xxx-x
+        normalizado = normalizar_rut(v, "Formato rut inválido, debe ser xx.xxx.xxx-x o xxxxxxxx-x.")
         if len(v) < 9 or len(v) > 12:
             raise ValueError("El rut debe tener entre 9 y 12 caracteres.")
-        return v
+        return normalizado
 
     @field_validator("email")
     @classmethod
