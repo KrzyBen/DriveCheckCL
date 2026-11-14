@@ -5,7 +5,10 @@ from starlette.exceptions import HTTPException
 
 # Carpetas de storage/ que NUNCA se sirven por HTTP (el dataset solo lo lee el administrador
 # en el servidor). Hoy el resto de storage/ sigue público: ver "E6 · Seguridad" en el estado.
-CARPETAS_PRIVADAS = ("dataset",)
+# dataset.nuevo, dataset.anterior y dataset.lock los usa la exportación (dataset_service):
+# el dataset se arma en dataset.nuevo y al final reemplaza a dataset, así que contienen
+# lo mismo que él y tampoco pueden quedar expuestos.
+CARPETAS_PRIVADAS = ("dataset", "dataset.nuevo", "dataset.anterior", "dataset.lock")
 
 
 class StorageFiles(StaticFiles):

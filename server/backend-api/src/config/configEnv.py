@@ -23,6 +23,9 @@ CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 # Canal interno hacia backend-ia (no usa JWT de usuario, usa un secreto compartido)
 BACKEND_IA_URL = os.getenv("BACKEND_IA_URL", "http://backend-ia:8100")
 INTERNAL_API_KEY = os.getenv("INTERNAL_API_KEY")
+# Tiempo máximo de lectura por clip al pedir a backend-ia que lo anonimice (segundos).
+# Es largo a propósito: el proceso tarda del orden de 0,2 s por frame en CPU.
+ANONIMIZAR_TIMEOUT_S = int(os.getenv("ANONIMIZAR_TIMEOUT_S", 1800))
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
