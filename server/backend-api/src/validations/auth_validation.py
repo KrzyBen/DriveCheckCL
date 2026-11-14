@@ -8,9 +8,7 @@ class LoginValidation(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def validate_email_domain(cls, v):
-        if not v.endswith("@drivecheckcl.cl") and not v.endswith("@gmail.com"):
-            raise ValueError("El correo debe ser válido")
+    def validate_email(cls, v):
         if len(v) < 10 or len(v) > 60:
             raise ValueError("El correo debe tener entre 10 y 60 caracteres.")
         return v
