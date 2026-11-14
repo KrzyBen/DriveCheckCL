@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 import anonimizador as an
+import video_utils as vu
 
 ANCHO, ALTO, N = 480, 360, 40
 ROSTRO = (30, 30, 90, 100)
@@ -161,12 +162,12 @@ def main():
             270: ((6, 4), (5, 0)),   # antihorario: pasa a la esquina inf. izquierda
         }
         for rotacion, (dimensiones, posicion) in esperados.items():
-            girado = an._enderezar(sintetico, rotacion)
+            girado = vu.enderezar(sintetico, rotacion)
             marcados = [tuple(int(v) for v in p) for p in np.argwhere(girado[:, :, 0] == 255)]
             comprobar(girado.shape[:2] == dimensiones and marcados == [posicion],
                       f"rotación {rotacion}: {girado.shape[1]}x{girado.shape[0]}, píxel en {marcados}")
-        comprobar(an._enderezar(sintetico, 0) is sintetico, "rotación 0 devuelve el mismo frame sin copiarlo")
-        captura, rotacion = an._abrir_video(origen)
+        comprobar(vu.enderezar(sintetico, 0) is sintetico, "rotación 0 devuelve el mismo frame sin copiarlo")
+        captura, rotacion = vu.abrir_video(origen)
         captura.release()
         comprobar(rotacion == 0, "un video sin metadato de rotación se lee con rotación 0")
 

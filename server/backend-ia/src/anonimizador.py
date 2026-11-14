@@ -1,12 +1,10 @@
-import logging
 import os
 import time
 
 import cv2
 
 from patente_formato import normalizar_patente
-
-logger = logging.getLogger(__name__)
+from video_utils import abrir_video, enderezar
 
 # Umbrales BAJOS a propósito: para difuminar importa el recall, no la precisión.
 UMBRAL_ROSTROS = 0.3
@@ -108,48 +106,6 @@ def _asociar(tracks, caja, frame, ya_usados, max_hueco, iou_min=0.3):
     return mejor
 
 
-# ── rotación ───────────────────────────────────────────────────────────────
-
-# Rotación del metadato (grados en sentido horario) -> giro que endereza el frame
-_GIROS = {
-    90: cv2.ROTATE_90_CLOCKWISE,
-    180: cv2.ROTATE_180,
-    270: cv2.ROTATE_90_COUNTERCLOCKWISE,
-}
-
-
-def _abrir_video(origen):
-    """
-    Abre el video con la rotación automática desactivada y devuelve (captura, rotación).
-    Los clips de Android vienen como 1280x720 con metadato de rotación 90°: OpenCV no
-    siempre endereza esos frames, así que se hace a mano con _enderezar para que el
-    resultado no dependa de la versión ni del backend de OpenCV.
-    """
-    captura = cv2.VideoCapture(origen)
-    if not captura.isOpened():
-        captura.release()
-        raise IOError(f"No se pudo abrir el video: {origen}")
-
-    # Si el backend no acepta desactivarla, se sigue igual pero queda registrado:
-    # en ese caso podría enderezarse dos veces y conviene saberlo al revisar el resultado
-    if not captura.set(cv2.CAP_PROP_ORIENTATION_AUTO, 0):
-        logger.warning("No se pudo desactivar la rotación automática al abrir %s", origen)
-
-    # El metadato puede venir como 90.0 o -90; se normaliza a 0, 90, 180 o 270
-    rotacion = int(round(captura.get(cv2.CAP_PROP_ORIENTATION_META))) % 360
-    if rotacion not in (0, *_GIROS):
-        logger.warning("Rotación %s no soportada en %s; se trata como 0", rotacion, origen)
-        rotacion = 0
-    return captura, rotacion
-
-
-def _enderezar(frame, rotacion):
-    """Gira el frame según el metadato de rotación. Con rotación 0 lo devuelve sin tocar."""
-    if rotacion == 0:
-        return frame
-    return cv2.rotate(frame, _GIROS[rotacion])
-
-
 # ── núcleo ─────────────────────────────────────────────────────────────────
 
 def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
@@ -163,7 +119,7 @@ def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
     escribir, así que el video de salida queda derecho y sin metadato de rotación.
     """
     inicio = time.time()
-    captura, rotacion = _abrir_video(origen)
+    captura, rotacion = abrir_video(origen)
     fps = captura.get(cv2.CAP_PROP_FPS) or 30.0
     # El tamaño se toma del primer frame YA enderezado (no de CAP_PROP_FRAME_WIDTH/HEIGHT,
     # que describen el frame sin girar)
@@ -177,7 +133,7 @@ def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
             ok, frame = captura.read()
             if not ok:
                 break
-            frame = _enderezar(frame, rotacion)
+            frame = enderezar(frame, rotacion)
             if total == 0:
                 alto, ancho = frame.shape[:2]
             total += 1
@@ -226,13 +182,13 @@ def anonimizar_clip(origen, destino, patente_evento, rostros, placas, lector,
     try:
         if not salida.isOpened():
             raise IOError("No se pudo crear el video de salida (codec mp4v no disponible)")
-        captura, rotacion = _abrir_video(origen)
+        captura, rotacion = abrir_video(origen)
         escritos = 0
         for indice in range(total):
             ok, frame = captura.read()
             if not ok:
                 break
-            frame = _enderezar(frame, rotacion)
+            frame = enderezar(frame, rotacion)
             # VideoWriter descarta en silencio los frames de otro tamaño: mejor fallar
             if frame.shape[:2] != (alto, ancho):
                 raise IOError(
