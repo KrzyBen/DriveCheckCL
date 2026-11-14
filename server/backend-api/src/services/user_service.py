@@ -102,6 +102,13 @@ async def update_user_admin_service(db: Session, target_id: int, body: dict):
         if not user:
             return [None, "Usuario no encontrado"]
 
+        # Evita que se quite el rol al último administrador del sistema
+        nuevo_rol = body.get("rol")
+        if user.rol == "administrador" and nuevo_rol and nuevo_rol != "administrador":
+            total_admins = db.query(User).filter(User.rol == "administrador").count()
+            if total_admins <= 1:
+                return [None, "Debe quedar al menos un administrador activo"]
+
         if body.get("rut") or body.get("email"):
             from sqlalchemy import or_
             dup_filters = []
