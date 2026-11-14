@@ -288,6 +288,20 @@ def _bloqueo_exportacion(destino: str):
         archivo.close()
 
 
+def exportacion_en_curso(destino: Optional[str] = None) -> bool:
+    """
+    True si otro proceso o hilo tiene tomado el candado de la exportación (por ejemplo, el
+    script de consola). Solo es una consulta: entre esta respuesta y tomar el candado otra
+    exportación podría adelantarse, y en ese caso exportar_dataset lanza ExportacionEnCurso.
+    """
+    destino = os.path.abspath(destino or carpeta_dataset())
+    try:
+        with _bloqueo_exportacion(destino):
+            return False
+    except ExportacionEnCurso:
+        return True
+
+
 def _limpiar_restos(destino: str) -> None:
     """
     Deja el disco listo para exportar, con el candado ya tomado (nadie más está escribiendo):

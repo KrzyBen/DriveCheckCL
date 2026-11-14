@@ -6,10 +6,13 @@ el cliente real con un transporte HTTP simulado (httpx.MockTransport).
 Uso (desde el contenedor de backend-api, en src/):
     python autopruebas_dataset.py
 """
+import inspect
 import json
 import os
 import sys
 import tempfile
+import threading
+import time
 from types import SimpleNamespace
 
 import httpx
@@ -376,9 +379,139 @@ def pruebas_cliente(carpeta):
         comprobar(error.motivo == "sin_clave" and limpio(), "sin INTERNAL_API_KEY -> ServicioNoDisponible(sin_clave)")
 
 
+# ── pruebas de la exportación en segundo plano ─────────────────────────────
+
+class SesionFalsa:
+    def __init__(self):
+        self.cerrada = False
+
+    def close(self):
+        self.cerrada = True
+
+
+class AnonimizadorControlado(AnonimizadorFalso):
+    """Como AnonimizadorFalso, pero espera a `soltar` antes de cada clip y registra close()."""
+
+    def __init__(self, fallos=None, esperar=False):
+        super().__init__(fallos)
+        self.soltar = threading.Event()
+        if not esperar:
+            self.soltar.set()
+        self.cerrado = False
+
+    def __call__(self, video_path, destino, patente_evento=None):
+        self.soltar.wait(10)
+        super().__call__(video_path, destino, patente_evento)
+
+    def close(self):
+        self.cerrado = True
+
+
+def esperar_hasta(condicion, segundos=5):
+    limite = time.monotonic() + segundos
+    while time.monotonic() < limite:
+        if condicion():
+            return True
+        time.sleep(0.02)
+    return False
+
+
+def pruebas_trabajo(storage):
+    from controllers import dataset_controller
+    from services import dataset_admin_service as das
+
+    destino = os.path.join(storage, "dataset")
+    preparar(storage, [reporte(1, [video(11, 1, 1), video(12, 1, 2)], patente="BCDF12"),
+                       reporte(2, [video(21, 2, 1)]), reporte(3, [video(31, 3, 1)])])
+
+    def lanzar(anonimizador, sesion=None, crear_sesion=None):
+        return das.iniciar_exportacion_service(crear_sesion=crear_sesion or (lambda: sesion),
+                                               crear_anonimizador=lambda: anonimizador, destino=destino)
+
+    print("== 13. Exportación en segundo plano: estado y 409 ==")
+    claves = {"estado", "clip_actual", "total", "omitidos", "resumen", "error", "iniciado_en", "terminado_en"}
+    inicial = das.estado_exportacion()
+    comprobar(inicial["estado"] == "inactivo" and set(inicial) == claves, "estado inicial 'inactivo' con todas las claves")
+    sesion, anon = SesionFalsa(), AnonimizadorControlado(esperar=True)
+    data, error = lanzar(anon, sesion)
+    comprobar(error is None and data["estado"] == "en_curso" and data["iniciado_en"] and data["terminado_en"] is None,
+              "la primera solicitud deja el trabajo 'en_curso'")
+    data2, error2 = lanzar(AnonimizadorControlado(), SesionFalsa())
+    comprobar(data2 is None and error2["status"] == 409, "una segunda solicitud mientras corre -> 409")
+    comprobar(esperar_hasta(lambda: das.estado_exportacion()["clip_actual"] == 1),
+              "clip_actual avanza mientras corre")
+    comprobar(das.estado_exportacion()["total"] == 4, "total = 4 clips a anonimizar")
+    anon.soltar.set()
+    comprobar(das.esperar_exportacion(10), "el hilo termina")
+    fin = das.estado_exportacion()
+    comprobar(fin["estado"] == "terminado" and fin["resumen"]["clips"] == 4 and fin["error"] is None
+              and fin["terminado_en"] and fin["clip_actual"] == 4 and "destino" not in fin["resumen"],
+              "pasa a 'terminado' con el resumen (sin la ruta del servidor)")
+    comprobar(sesion.cerrada and anon.cerrado, "cierra la sesión de base de datos y el cliente de anonimización")
+
+    print("== 14. Omitidos y abortos en segundo plano ==")
+    anon = AnonimizadorControlado({"usuario_1/reporte_2/video_1.mp4": AnonimizacionFallida("tiempo_agotado")})
+    lanzar(anon, SesionFalsa())
+    das.esperar_exportacion(10)
+    fin = das.estado_exportacion()
+    comprobar(fin["estado"] == "terminado" and fin["omitidos"] == 1
+              and fin["resumen"]["omitidos"]["clips"] == [{"clip_id": "clip_000002_1", "motivo": "tiempo_agotado"}],
+              "terminado con 1 omitido y su detalle en el resumen")
+    sesion = SesionFalsa()
+    anon = AnonimizadorControlado({"usuario_1/reporte_1/video_1.mp4": ServicioNoDisponible("sin_conexion")})
+    lanzar(anon, sesion)
+    das.esperar_exportacion(10)
+    fin = das.estado_exportacion()
+    comprobar(fin["estado"] == "error" and fin["error"]["motivo"] == "sin_conexion" and fin["terminado_en"],
+              "ExportacionAbortada -> 'error' con el motivo")
+    comprobar(sesion.cerrada and anon.cerrado, "también cierra todo cuando se aborta")
+
+    print("== 15. Un error inesperado nunca deja el estado 'en_curso' ==")
+    sesion = SesionFalsa()
+    anon = AnonimizadorControlado({"usuario_1/reporte_1/video_2.mp4": RuntimeError("falla rara")})
+    lanzar(anon, sesion)
+    das.esperar_exportacion(10)
+    fin = das.estado_exportacion()
+    comprobar(fin["estado"] == "error" and fin["error"]["motivo"] == "error_interno" and fin["terminado_en"],
+              "error dentro del hilo -> 'error' (error_interno)")
+    comprobar("falla rara" not in fin["error"]["mensaje"], "el detalle interno no llega al panel")
+    comprobar(sesion.cerrada and anon.cerrado, "cierra todo tras el error inesperado")
+
+    def sin_base():
+        raise RuntimeError("base de datos caída")
+
+    anon = AnonimizadorControlado()
+    lanzar(anon, crear_sesion=sin_base)
+    das.esperar_exportacion(10)
+    fin = das.estado_exportacion()
+    comprobar(fin["estado"] == "error" and fin["error"]["motivo"] == "error_interno",
+              "si falla al abrir la sesión también queda en 'error'")
+    data, error = lanzar(AnonimizadorControlado(), SesionFalsa())
+    das.esperar_exportacion(10)
+    comprobar(error is None and das.estado_exportacion()["estado"] == "terminado",
+              "después de un error se puede volver a exportar")
+
+    print("== 16. Exportación lanzada desde la consola (otro proceso) ==")
+    with ds._bloqueo_exportacion(os.path.abspath(destino)):
+        data, error = lanzar(AnonimizadorControlado(), SesionFalsa())
+    comprobar(data is None and error["status"] == 409 and "consola" in error["message"],
+              "con el candado de archivo tomado -> 409")
+    comprobar(das.estado_exportacion()["estado"] == "terminado", "y no pisa el estado de la última exportación")
+
+    print("== 17. Los endpoints no bloquean el event loop ==")
+    for nombre in ("exportar_dataset_admin", "estado_exportacion_dataset"):
+        comprobar(not inspect.iscoroutinefunction(getattr(dataset_controller, nombre)),
+                  f"{nombre} es 'def' (FastAPI lo corre en su pool de hilos)")
+    from routes.admin_dataset_routes import router
+    rutas = {(r.path, tuple(sorted(r.methods))) for r in router.routes}
+    comprobar(("/exportar/estado", ("GET",)) in rutas, "GET /exportar/estado registrada en el router de administración")
+
+
 def main():
     with tempfile.TemporaryDirectory() as storage:
         pruebas_exportacion(storage)
+    with tempfile.TemporaryDirectory() as storage:
+        pruebas_trabajo(storage)
     with tempfile.TemporaryDirectory() as carpeta:
         pruebas_cliente(carpeta)
     print("\nTODO OK" if not FALLOS else f"\nFALLARON {len(FALLOS)}: {FALLOS}")

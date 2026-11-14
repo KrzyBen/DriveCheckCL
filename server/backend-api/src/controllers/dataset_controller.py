@@ -11,7 +11,7 @@ from entity.user_entity import User
 from middlewares.authorization_middleware import is_admin
 from services.dataset_admin_service import (
     resumen_service, listar_clips_service, actualizar_clip_service,
-    restablecer_clip_service, exportar_service, crear_zip_dataset,
+    restablecer_clip_service, iniciar_exportacion_service, estado_exportacion, crear_zip_dataset,
 )
 from validations.dataset_validation import ClipEtiquetasValidation
 from handlers.response_handlers import handle_success, handle_error_client, handle_error_server
@@ -82,15 +82,24 @@ async def restablecer_clip_dataset(
         return handle_error_server(500, str(error))
 
 
-async def exportar_dataset_admin(
-    current_admin: User = Depends(is_admin),
-    db: Session = Depends(get_db),
-):
+# Estos dos son "def" (no "async def") a propósito: FastAPI los ejecuta en su pool de hilos,
+# así la consulta del candado de archivo nunca frena el event loop. La exportación en sí
+# corre en su propio hilo (dataset_admin_service) y la API sigue respondiendo mientras tanto.
+def exportar_dataset_admin(current_admin: User = Depends(is_admin)):
+    """Lanza la exportación en segundo plano: 202 con el estado inicial, o 409 si ya hay una."""
     try:
-        data, error = await exportar_service(db)
+        data, error = iniciar_exportacion_service()
         if error:
-            return _responder_error(error, "No se pudo generar el dataset")
-        return handle_success(200, "Dataset generado", data)
+            return _responder_error(error, "No se pudo iniciar la exportación del dataset")
+        return handle_success(202, "Exportación del dataset iniciada", data)
+    except Exception as error:
+        return handle_error_server(500, str(error))
+
+
+def estado_exportacion_dataset(current_admin: User = Depends(is_admin)):
+    """Estado de la exportación en curso o de la última que corrió en este proceso."""
+    try:
+        return handle_success(200, "Estado de la exportación del dataset", estado_exportacion())
     except Exception as error:
         return handle_error_server(500, str(error))
 

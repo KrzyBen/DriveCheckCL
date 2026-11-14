@@ -1,13 +1,18 @@
+import copy
 import os
 import tempfile
+import threading
 import zipfile
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from config.configDb import SessionLocal
 from entity.reporte_entity import Reporte, VideoReporte, Infraccion
 from entity.dataset_clip_entity import DatasetClip
 from helpers import dataset_helper as h
+from helpers.anonimizador_client import AnonimizacionFallida, ClienteAnonimizador
 from helpers.storage_helper import get_ruta_absoluta
 from services import dataset_service as ds
 
@@ -195,14 +200,136 @@ async def restablecer_clip_service(db: Session, admin, video_id: int):
         return [None, {"status": 500, "message": "Error interno del servidor"}]
 
 
-async def exportar_service(db: Session):
+# ── exportación en segundo plano ───────────────────────────────────────────
+#
+# La exportación anonimiza cada clip con backend-ia y puede tardar minutos u horas, así que
+# corre en un hilo y el panel consulta su estado. El estado vive en MEMORIA de este proceso:
+# solo vale con UN worker de uvicorn (el CMD actual del Dockerfile). Con varios workers cada
+# uno tendría su propio estado y GET /exportar/estado podría caer en otro proceso que no sabe
+# nada de la exportación. Lo que sí se respeta entre procesos es el candado de archivo de
+# dataset_service (dataset.lock): nunca corren dos exportaciones a la vez.
+#
+# Si el contenedor se reinicia a mitad de camino, el estado se pierde (vuelve a "inactivo")
+# y el dataset anterior queda intacto: la próxima exportación limpia lo que quedó a medias.
+
+ESTADOS = ("inactivo", "en_curso", "terminado", "error")
+
+_candado_estado = threading.Lock()
+_hilo: Optional[threading.Thread] = None
+_estado = {
+    "estado": "inactivo",
+    "clip_actual": 0,
+    "total": 0,
+    "omitidos": 0,         # clips omitidos hasta ahora; el detalle queda en resumen.omitidos
+    "resumen": None,       # resumen de exportar_dataset cuando termina bien
+    "error": None,         # {"motivo", "mensaje"} cuando termina en error
+    "iniciado_en": None,
+    "terminado_en": None,
+}
+
+
+def _ahora() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _actualizar(**cambios) -> None:
+    with _candado_estado:
+        _estado.update(cambios)
+
+
+def estado_exportacion() -> dict:
+    """Copia del estado actual (nunca el diccionario compartido)."""
+    with _candado_estado:
+        return copy.deepcopy(_estado)
+
+
+def _al_avanzar(actual: int, total: int, clip_id: str) -> None:
+    _actualizar(clip_actual=actual, total=total)
+
+
+def _contar_omitidos(anonimizador):
+    """Envuelve al anonimizador para llevar la cuenta de omitidos mientras corre."""
+    def anonimizar(video_path, destino, patente_evento=None):
+        try:
+            anonimizador(video_path, destino, patente_evento)
+        except AnonimizacionFallida:
+            with _candado_estado:
+                _estado["omitidos"] += 1
+            raise
+    return anonimizar
+
+
+def _trabajo(crear_sesion, crear_anonimizador, destino) -> None:
+    """Cuerpo del hilo. Pase lo que pase, el estado termina en "terminado" o "error"."""
+    db = anonimizador = None
     try:
-        resumen = ds.exportar_dataset(db)
+        db = crear_sesion()
+        anonimizador = crear_anonimizador()
+        resumen = ds.exportar_dataset(db, destino, anonimizador=_contar_omitidos(anonimizador),
+                                      al_avanzar=_al_avanzar)
         resumen.pop("destino", None)
-        return [resumen, None]
-    except Exception as error:
-        print(f"Error al exportar el dataset: {error}")
-        return [None, {"status": 500, "message": "No se pudo generar el dataset"}]
+        _actualizar(estado="terminado", resumen=resumen, omitidos=resumen["omitidos"]["total"],
+                    terminado_en=_ahora())
+    except ds.ExportacionEnCurso as error:
+        # Otro proceso (el script de consola) tomó el candado justo después de la consulta
+        _actualizar(estado="error", error={"motivo": "en_curso", "mensaje": str(error)},
+                    terminado_en=_ahora())
+    except ds.ExportacionAbortada as error:
+        print(f"Exportación del dataset abortada ({error.motivo}): {error}")
+        _actualizar(estado="error", error={"motivo": error.motivo, "mensaje": str(error)},
+                    terminado_en=_ahora())
+    except BaseException as error:
+        # BaseException a propósito: ni siquiera un SystemExit deja el estado en "en_curso"
+        print(f"Error inesperado al exportar el dataset: {type(error).__name__}: {error}")
+        _actualizar(estado="error",
+                    error={"motivo": "error_interno", "mensaje": "Error inesperado al generar el dataset"},
+                    terminado_en=_ahora())
+    finally:
+        if anonimizador is not None:
+            try:
+                anonimizador.close()
+            except Exception as error:
+                print(f"No se pudo cerrar el cliente de anonimización: {error}")
+        if db is not None:
+            db.close()
+
+
+def iniciar_exportacion_service(crear_sesion=SessionLocal, crear_anonimizador=ClienteAnonimizador,
+                                destino: Optional[str] = None):
+    """
+    Lanza la exportación en un hilo y devuelve [estado, None] de inmediato, o [None, error]
+    con status 409 si ya hay una en curso (en este proceso o en otro). Los parámetros
+    permiten a las autopruebas reemplazar la base de datos y backend-ia.
+    """
+    global _hilo
+    with _candado_estado:
+        if _estado["estado"] == "en_curso":
+            return _error(409, "Ya hay una exportación del dataset en curso")
+        if ds.exportacion_en_curso(destino):
+            return _error(409, "Ya hay una exportación del dataset en curso (iniciada desde la consola)")
+        _estado.update(estado="en_curso", clip_actual=0, total=0, omitidos=0, resumen=None,
+                       error=None, iniciado_en=_ahora(), terminado_en=None)
+        # daemon: si uvicorn se detiene no espera horas a que termine; lo que quede a medias
+        # (dataset.nuevo) lo limpia la siguiente exportación
+        _hilo = threading.Thread(target=_trabajo, args=(crear_sesion, crear_anonimizador, destino),
+                                 name="exportacion-dataset", daemon=True)
+        try:
+            _hilo.start()
+        except Exception as error:
+            print(f"No se pudo lanzar el hilo de exportación: {error}")
+            _estado.update(estado="error", terminado_en=_ahora(),
+                           error={"motivo": "error_interno", "mensaje": "No se pudo iniciar la exportación"})
+            return _error(500, "No se pudo iniciar la exportación del dataset")
+        return [copy.deepcopy(_estado), None]
+
+
+def esperar_exportacion(timeout: Optional[float] = None) -> bool:
+    """Espera a que termine el hilo (lo usan las autopruebas). True si ya no está corriendo."""
+    hilo = _hilo
+    if hilo is not None:
+        hilo.join(timeout)
+        return not hilo.is_alive()
+    return True
 
 
 def crear_zip_dataset() -> Optional[str]:
