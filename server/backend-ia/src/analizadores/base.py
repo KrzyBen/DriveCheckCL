@@ -5,6 +5,7 @@ import cv2
 from ultralytics import YOLO
 
 from config import MODELOS_DIR, N_FRAMES
+from video_utils import abrir_video, enderezar
 
 
 class VideoIlegibleError(Exception):
@@ -52,22 +53,35 @@ class AnalizadorBase:
         return {i: str(n) for i, n in enumerate(self.metadata.get("clases", []))}
 
     def extraer_frames(self, video_path: str, cantidad: int = N_FRAMES):
-        captura = cv2.VideoCapture(video_path)
-        total_frames = int(captura.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        if total_frames <= 0:
-            captura.release()
+        """
+        Devuelve hasta `cantidad` frames repartidos a lo largo del clip, ya enderezados
+        según el metadato de rotación (los clips de Android vienen girados 90°).
+        Si el video no se puede abrir o no tiene frames, devuelve [] y analizar()
+        lanza VideoIlegibleError.
+        """
+        # Se abre sin rotación automática y se lee el metadato, igual que en el anonimizador
+        try:
+            captura, rotacion = abrir_video(video_path)
+        except IOError:
+            # Se mantiene el comportamiento anterior: un video que no abre cuenta como
+            # ilegible solo para ese video, no como error interno de toda la capa
             return []
 
-        indices = [int(i * total_frames / cantidad) for i in range(cantidad)]
         frames = []
-        for indice in indices:
-            captura.set(cv2.CAP_PROP_POS_FRAMES, indice)
-            ok, frame = captura.read()
-            if ok:
-                frames.append(frame)
+        try:
+            total_frames = int(captura.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames <= 0:
+                return []
 
-        captura.release()
+            indices = [int(i * total_frames / cantidad) for i in range(cantidad)]
+            for indice in indices:
+                captura.set(cv2.CAP_PROP_POS_FRAMES, indice)
+                ok, frame = captura.read()
+                if ok:
+                    # Con rotación 0 enderezar devuelve el mismo frame: comportamiento idéntico al anterior
+                    frames.append(enderezar(frame, rotacion))
+        finally:
+            captura.release()
         return frames
 
     def analizar(self, video_path: str) -> dict:
