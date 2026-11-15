@@ -3,12 +3,9 @@ import posixpath
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
-# Carpetas de storage/ que NUNCA se sirven por HTTP (el dataset solo lo lee el administrador
-# en el servidor). Hoy el resto de storage/ sigue público: ver "E6 · Seguridad" en el estado.
-# dataset.nuevo, dataset.anterior y dataset.lock los usa la exportación (dataset_service):
-# el dataset se arma en dataset.nuevo y al final reemplaza a dataset, así que contienen
-# lo mismo que él y tampoco pueden quedar expuestos.
-CARPETAS_PRIVADAS = ("dataset", "dataset.nuevo", "dataset.anterior", "dataset.lock")
+# Las carpetas privadas (dataset*) se definen en url_firmada_helper, que tampoco las firma.
+# Hoy el resto de storage/ sigue público: ver "E6 · Seguridad" en el estado.
+from helpers.url_firmada_helper import CARPETAS_PRIVADAS
 
 
 class StorageFiles(StaticFiles):

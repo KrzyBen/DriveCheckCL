@@ -1,4 +1,5 @@
 from entity.reporte_entity import Reporte
+from helpers.url_firmada_helper import url_firmada
 
 
 def _videos_ordenados(reporte: Reporte) -> list:
@@ -29,6 +30,9 @@ def serializar_reporte(reporte: Reporte) -> dict:
         "estado": reporte.estado.value if hasattr(reporte.estado, "value") else reporte.estado,
         "pdf_disponible": reporte.pdf_path is not None,
         "pdf_path": reporte.pdf_path,   # <-- Agregar esta línea
+        # URL firmada con vencimiento para abrir el PDF (None si no hay); pdf_path se mantiene
+        # porque la app lo usa para saber si el PDF está disponible
+        "pdf_url": url_firmada(reporte.pdf_path),
         "notas_admin": reporte.notas_admin if reporte.estado.value == "rechazado" else None,
         "created_at": str(reporte.created_at),
         "updated_at": str(reporte.updated_at),
@@ -37,6 +41,7 @@ def serializar_reporte(reporte: Reporte) -> dict:
                 "id": v.id,
                 "orden": v.orden,
                 "path": v.video_path,
+                "url": url_firmada(v.video_path),  # URL firmada con vencimiento para el <video>
                 "lat": v.lat,
                 "lon": v.lon,
                 "grabado_en": v.grabado_en.isoformat() if v.grabado_en else None,
