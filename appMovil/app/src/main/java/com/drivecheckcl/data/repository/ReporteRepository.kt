@@ -31,8 +31,6 @@ object ReporteRepository {
         RetrofitClient.instance.create(ReporteApiService::class.java)
     }
 
-    private val STORAGE_BASE_URL = "${RetrofitClient.BASE_URL}storage/"
-
     private val pdfClient = RetrofitClient.okHttpClient
 
     suspend fun crearReporte(
@@ -163,13 +161,16 @@ object ReporteRepository {
 
         try {
 
-            Log.d("PDF", "pdfPath = $pdfPath")
-            Log.d("PDF", "URL = ${STORAGE_BASE_URL}$pdfPath")
+            // El PDF se pide al endpoint autenticado (pdfClient agrega el Bearer), no a /storage:
+            // así no depende de una URL firmada que pueda vencer con la lista abierta
+            val urlPdf = "${RetrofitClient.BASE_URL}api/app/reporte/$reporteId/pdf"
+            Log.d("PDF", "reporte = $reporteId, pdfPath = $pdfPath")
+            Log.d("PDF", "URL = $urlPdf")
 
             val response = pdfClient
                 .newCall(
                     Request.Builder()
-                        .url("${STORAGE_BASE_URL}$pdfPath")
+                        .url(urlPdf)
                         .build()
                 )
                 .execute()
