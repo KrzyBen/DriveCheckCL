@@ -61,11 +61,11 @@ async def create_infracciones_catalogo():
             return
  
         infracciones_iniciales = [
-            {"articulo": "Art. 141", "descripcion": "No respetar luz roja"},
-            {"articulo": "Art. 144", "descripcion": "Exceso de velocidad"},
+            {"articulo": "Art. 199 N.º 1", "descripcion": "No detenerse ante la luz roja del semáforo"},
+            {"articulo": "Arts. 145, 146 y 203", "descripcion": "Exceso de velocidad"},
             {"articulo": "Art. 118", "descripcion": "No mantener distancia de seguimiento"},
-            {"articulo": "Art. 114", "descripcion": "Adelantamiento indebido"},
-            {"articulo": "Art. 197", "descripcion": "Conducción en estado de ebriedad"},
+            {"articulo": "Art. 200 N.º 3", "descripcion": "Adelantamiento indebido"},
+            {"articulo": "Arts. 193 y 196", "descripcion": "Conducción bajo la influencia del alcohol o en estado de ebriedad"},
         ]
  
         for i in infracciones_iniciales:
