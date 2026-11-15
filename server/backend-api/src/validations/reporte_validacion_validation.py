@@ -5,8 +5,6 @@ from pydantic import BaseModel, field_validator
 class ReporteValidacionCallback(BaseModel):
     estado_analisis: str
     resultados_ia: Optional[dict] = None
-    patente_confirmada: Optional[str] = None
-    severidad_propuesta: Optional[str] = None
     notas_ia: Optional[str] = None
 
     @field_validator("estado_analisis")

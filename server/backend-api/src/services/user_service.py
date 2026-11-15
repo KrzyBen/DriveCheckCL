@@ -1,7 +1,13 @@
+import os
+
 from sqlalchemy.orm import Session
 
 from entity.user_entity import User
+from entity.reporte_entity import Reporte
+from entity.reporte_validacion_entity import ReporteValidacion
+from entity.password_reset_entity import PasswordResetCode
 from helpers.bcrypt_helper import compare_password, encrypt_password
+from helpers.storage_helper import eliminar_carpeta_reporte, get_storage_root
 
 async def create_user_admin_service(db: Session, nombre_completo: str, rut: str, email: str, password: str, rol: str = "conductor"):
     try:
@@ -102,6 +108,13 @@ async def update_user_admin_service(db: Session, target_id: int, body: dict):
         if not user:
             return [None, "Usuario no encontrado"]
 
+        # Evita que se quite el rol al último administrador del sistema
+        nuevo_rol = body.get("rol")
+        if user.rol == "administrador" and nuevo_rol and nuevo_rol != "administrador":
+            total_admins = db.query(User).filter(User.rol == "administrador").count()
+            if total_admins <= 1:
+                return [None, "Debe quedar al menos un administrador activo"]
+
         if body.get("rut") or body.get("email"):
             from sqlalchemy import or_
             dup_filters = []
@@ -139,6 +152,9 @@ async def delete_user_service(db: Session, current_admin: User, id: int = None, 
         if id:    filters.append(User.id == id)
         if rut:   filters.append(User.rut == rut)
         if email: filters.append(User.email == email)
+        # Sin ningún criterio, or_() vacío no filtra y se tomaría el primer usuario de la tabla
+        if not filters:
+            return [None, "Debes indicar id, rut o email"]
 
         user = db.query(User).filter(or_(*filters)).first()
         if not user:
@@ -156,8 +172,57 @@ async def delete_user_service(db: Session, current_admin: User, id: int = None, 
             "id": user.id, "nombre_completo": user.nombre_completo,
             "rut": user.rut, "email": user.email, "rol": user.rol,
         }
+
+        # Reportes de otros usuarios que este validó: se conservan, pero sin referencia a él
+        db.query(Reporte).filter(Reporte.validado_por_id == user.id).update(
+            {Reporte.validado_por_id: None}, synchronize_session=False
+        )
+        db.query(ReporteValidacion).filter(ReporteValidacion.actualizado_por_id == user.id).update(
+            {ReporteValidacion.actualizado_por_id: None}, synchronize_session=False
+        )
+
+        # Reportes propios: se borran sin aplicar la regla de los 7 días. El ORM elimina en
+        # cascada videos, validación e infracciones; la base de datos, notificaciones y clips del dataset
+        reportes = db.query(Reporte).filter(Reporte.usuario_id == user.id).all()
+        carpetas = [(reporte.usuario_id, reporte.id) for reporte in reportes]
+        for reporte in reportes:
+            db.delete(reporte)
+
+        # Códigos de recuperación de contraseña asociados a su correo
+        db.query(PasswordResetCode).filter(PasswordResetCode.email == user.email).delete(
+            synchronize_session=False
+        )
+
         db.delete(user)
+        # flush antes del commit para que cualquier error de la base de datos ocurra
+        # antes de tocar archivos; si falla, el except hace rollback y no se borra nada
+        db.flush()
         db.commit()
+
+        # Los archivos se borran solo después del commit: si falla alguno, el usuario ya
+        # quedó eliminado y se informa qué carpetas quedaron pendientes en vez de ocultarlo
+        archivos_no_eliminados = []
+        for usuario_id, reporte_id in carpetas:
+            try:
+                eliminar_carpeta_reporte(usuario_id, reporte_id)
+            except Exception as error_archivo:
+                print(f"No se pudo eliminar la carpeta del reporte {reporte_id} "
+                      f"del usuario {usuario_id}: {error_archivo}")
+                archivos_no_eliminados.append(reporte_id)
+
+        # Si la carpeta del usuario quedó vacía, también se elimina
+        carpeta_usuario = os.path.join(get_storage_root(), f"usuario_{user_data['id']}")
+        try:
+            if os.path.isdir(carpeta_usuario) and not os.listdir(carpeta_usuario):
+                os.rmdir(carpeta_usuario)
+        except OSError as error_carpeta:
+            print(f"No se pudo eliminar la carpeta vacía del usuario {user_data['id']}: {error_carpeta}")
+
+        if archivos_no_eliminados:
+            print(f"Usuario {user_data['id']} eliminado, pero quedaron archivos sin borrar "
+                  f"de los reportes: {archivos_no_eliminados}")
+
+        user_data["archivos_no_eliminados"] = archivos_no_eliminados
         return [user_data, None]
 
     except Exception as error:

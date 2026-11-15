@@ -1,6 +1,7 @@
 import re
 from typing import Optional
 from pydantic import BaseModel, EmailStr, field_validator
+from helpers.rut_helper import normalizar_rut
 
 
 class UserQueryValidation(BaseModel):
@@ -13,10 +14,8 @@ class UserQueryValidation(BaseModel):
     def validate_rut(cls, v):
         if v is None:
             return v
-        pattern = r'^(?:(?:[1-9]\d{0}|[1-2]\d{1})(\.\d{3}){2}|[1-9]\d{6}|[1-2]\d{7}|29\.999\.999|29999999)-[\dkK]$'
-        if not re.match(pattern, v):
-            raise ValueError("Formato rut inválido, debe ser xx.xxx.xxx-x o xxxxxxxx-x.")
-        return v
+        # Valida formato y dígito verificador, y guarda siempre el formato xx.xxx.xxx-x
+        return normalizar_rut(v, "Formato rut inválido, debe ser xx.xxx.xxx-x o xxxxxxxx-x.")
 
     def at_least_one(self):
         return any([self.id, self.email, self.rut])
@@ -46,10 +45,8 @@ class UserBodyValidation(BaseModel):
     def validate_rut(cls, v):
         if v is None:
             return v
-        pattern = r'^(?:(?:[1-9]\d{0}|[1-2]\d{1})(\.\d{3}){2}|[1-9]\d{6}|[1-2]\d{7}|29\.999\.999|29999999)-[\dkK]$'
-        if not re.match(pattern, v):
-            raise ValueError("Formato rut inválido.")
-        return v
+        # Valida formato y dígito verificador, y guarda siempre el formato xx.xxx.xxx-x
+        return normalizar_rut(v, "Formato rut inválido.")
 
     @field_validator("password", "new_password")
     @classmethod
@@ -92,10 +89,8 @@ class UserCreateValidation(BaseModel):
     @field_validator("rut")
     @classmethod
     def validate_rut(cls, v):
-        pattern = r'^(?:(?:[1-9]\d{0}|[1-2]\d{1})(\.\d{3}){2}|[1-9]\d{6}|[1-2]\d{7}|29\.999\.999|29999999)-[\dkK]$'
-        if not re.match(pattern, v):
-            raise ValueError("Formato rut inválido.")
-        return v
+        # Valida formato y dígito verificador, y guarda siempre el formato xx.xxx.xxx-x
+        return normalizar_rut(v, "Formato rut inválido.")
 
     @field_validator("password")
     @classmethod

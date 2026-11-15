@@ -11,17 +11,19 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Locale
-import java.util.TimeZone
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.FileOutputStream
 import com.drivecheckcl.data.local.LocalStorageManager
+import com.drivecheckcl.util.AppPreferences
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.logging.HttpLoggingInterceptor
+import org.json.JSONArray
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
 
 object ReporteRepository {
 
@@ -29,18 +31,25 @@ object ReporteRepository {
         RetrofitClient.instance.create(ReporteApiService::class.java)
     }
 
-    private val STORAGE_BASE_URL = "${RetrofitClient.BASE_URL}storage/"
-
     private val pdfClient = RetrofitClient.okHttpClient
 
     suspend fun crearReporte(
+        context: Context,
         titulo: String,
         comentario: String,
         videoPaths: List<String>
     ): Pair<InformeResponse?, String?> {
+        if (AppPreferences.soloWifiHabilitado(context) && !hayConexionWifi(context)) {
+            return Pair(null, "Tienes activado \"Enviar solo con WiFi\" y no estás conectado a una red WiFi.")
+        }
+
         return try {
             val tituloBody = titulo.toRequestBody("text/plain".toMediaTypeOrNull())
             val comentarioBody = comentario.toRequestBody("text/plain".toMediaTypeOrNull())
+
+            // JSON de cada clip (ubicación y hora), en el mismo orden que los videos.
+            val metadatosBody = withContext(Dispatchers.IO) { construirMetadatos(videoPaths) }
+                .toRequestBody("text/plain".toMediaTypeOrNull())
 
             val videoParts = videoPaths.mapIndexed { _, path ->
                 val file = File(path)
@@ -48,7 +57,7 @@ object ReporteRepository {
                 MultipartBody.Part.createFormData("videos", file.name, requestFile)
             }
 
-            val response = api.crearReporte(tituloBody, comentarioBody, videoParts)
+            val response = api.crearReporte(tituloBody, comentarioBody, metadatosBody, videoParts)
 
             if (response.isSuccessful) {
                 val body = response.body()
@@ -63,6 +72,34 @@ object ReporteRepository {
         } catch (_: Exception) {
             Pair(null, "Sin conexión al servidor")
         }
+    }
+
+    /**
+     * Arma un arreglo JSON con el contenido del archivo de metadatos de cada
+     * video, en el mismo orden. Si un video no tiene JSON (o está dañado),
+     * su posición va como null y el reporte se envía igual.
+     */
+    private fun construirMetadatos(videoPaths: List<String>): String {
+        val lista = JSONArray()
+        videoPaths.forEach { path ->
+            val archivo = LocalStorageManager.getArchivoMetadatos(File(path))
+            val entrada: Any = try {
+                if (archivo.exists()) JSONObject(archivo.readText()) else JSONObject.NULL
+            } catch (_: IOException) {
+                JSONObject.NULL
+            } catch (_: JSONException) {
+                JSONObject.NULL
+            }
+            lista.put(entrada)
+        }
+        return lista.toString()
+    }
+
+    private fun hayConexionWifi(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     suspend fun misReportes(): Pair<List<InformeLocal>?, String?> {
@@ -124,13 +161,16 @@ object ReporteRepository {
 
         try {
 
-            Log.d("PDF", "pdfPath = $pdfPath")
-            Log.d("PDF", "URL = ${STORAGE_BASE_URL}$pdfPath")
+            // El PDF se pide al endpoint autenticado (pdfClient agrega el Bearer), no a /storage:
+            // así no depende de una URL firmada que pueda vencer con la lista abierta
+            val urlPdf = "${RetrofitClient.BASE_URL}api/app/reporte/$reporteId/pdf"
+            Log.d("PDF", "reporte = $reporteId, pdfPath = $pdfPath")
+            Log.d("PDF", "URL = $urlPdf")
 
             val response = pdfClient
                 .newCall(
                     Request.Builder()
-                        .url("${STORAGE_BASE_URL}$pdfPath")
+                        .url(urlPdf)
                         .build()
                 )
                 .execute()
@@ -193,7 +233,7 @@ object ReporteRepository {
 // ── Mapper: InformeResponse (servidor) → InformeLocal (UI) ────────────────────
 
 private fun InformeResponse.toInformeLocal(numeracion: Int): InformeLocal {
-    val fechaMillis = parseIsoFecha(this.createdAt)
+    val fechaMillis = com.drivecheckcl.util.parseIsoFecha(this.createdAt)
     return InformeLocal(
         id            = this.id,
         titulo        = this.titulo,
@@ -206,15 +246,4 @@ private fun InformeResponse.toInformeLocal(numeracion: Int): InformeLocal {
         pdfPath       = this.pdfPath,
         motivoRechazo = this.notasAdmin
     )
-}
-
-private fun parseIsoFecha(fecha: String): Long {
-    return try {
-        // Postgres devuelve algo como "2026-06-21 16:51:36.801253+00:00"
-        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        sdf.timeZone = TimeZone.getTimeZone("UTC")
-        sdf.parse(fecha.substring(0, 19))?.time ?: System.currentTimeMillis()
-    } catch (_: Exception) {
-        System.currentTimeMillis()
-    }
 }

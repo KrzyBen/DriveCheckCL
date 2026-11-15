@@ -1,9 +1,11 @@
 package com.drivecheckcl.data.network
 
 import com.drivecheckcl.data.model.ApiResponse
+import com.drivecheckcl.data.model.ForgotPasswordRequest
 import com.drivecheckcl.data.model.LoginData
 import com.drivecheckcl.data.model.LoginRequest
 import com.drivecheckcl.data.model.RegisterRequest
+import com.drivecheckcl.data.model.ResetPasswordRequest
 import com.drivecheckcl.data.model.UserData
 import retrofit2.Response
 import retrofit2.http.Body
@@ -20,4 +22,14 @@ interface AuthApiService {
     suspend fun register(
         @Body request: RegisterRequest
     ): Response<ApiResponse<UserData>>
+
+    @POST("api/app/forgot-password")
+    suspend fun forgotPassword(
+        @Body request: ForgotPasswordRequest
+    ): Response<ApiResponse<Any>>
+
+    @POST("api/app/reset-password")
+    suspend fun resetPassword(
+        @Body request: ResetPasswordRequest
+    ): Response<ApiResponse<Any>>
 }

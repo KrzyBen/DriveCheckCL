@@ -11,8 +11,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Pesos de EasyOCR (detector CRAFT + reconocimiento en ingles, ~95 MB). Se bajan
+# aqui, al construir la imagen: asi el contenedor no necesita internet cuando
+# analiza la primera patente ni los vuelve a descargar al recrearse. Esta capa
+# va antes de copiar src/, por lo que solo se repite si cambia requirements.txt.
+RUN python -c "import easyocr; easyocr.Reader(['en'], gpu=False, verbose=False)"
 
 COPY src/ ./src
 COPY modelos/ ./modelos

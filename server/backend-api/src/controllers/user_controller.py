@@ -10,6 +10,7 @@ from services.user_service import (
     update_user_admin_service, delete_user_service, get_perfil_service, update_perfil_service
 )
 from validations.user_validation import UserBodyValidation, UserCreateValidation
+from helpers.rut_helper import normalizar_rut
 from handlers.response_handlers import handle_success, handle_error_client, handle_error_server
 from middlewares.authentication_middleware import authenticate_jwt
 
@@ -47,6 +48,12 @@ async def get_user(
     try:
         if not any([id, rut, email]):
             return handle_error_client(400, "Debes proporcionar al menos un parámetro: id, email o rut.")
+        # Normaliza el RUT para que coincida con el formato guardado (xx.xxx.xxx-x)
+        if rut:
+            try:
+                rut = normalizar_rut(rut)
+            except ValueError as rut_error:
+                return handle_error_client(400, str(rut_error))
         user, error = await get_user_service(db, id=id, rut=rut, email=email)
         if error:
             return handle_error_client(404, error)
@@ -81,6 +88,12 @@ async def delete_user(
     try:
         if not any([id, rut, email]):
             return handle_error_client(400, "Debes proporcionar al menos un parámetro: id, email o rut.")
+        # Normaliza el RUT para que coincida con el formato guardado (xx.xxx.xxx-x)
+        if rut:
+            try:
+                rut = normalizar_rut(rut)
+            except ValueError as rut_error:
+                return handle_error_client(400, str(rut_error))
         user, error = await delete_user_service(db, current_admin, id=id, rut=rut, email=email)
         if error:
             return handle_error_client(400, "Error eliminando al usuario", error)

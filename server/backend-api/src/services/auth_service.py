@@ -1,8 +1,12 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt
 from sqlalchemy.orm import Session
 
-from config.configEnv import ACCESS_TOKEN_SECRET
+from config.configEnv import (
+    ACCESS_TOKEN_SECRET,
+    ACCESS_TOKEN_ALGORITHM,
+    ACCESS_TOKEN_EXPIRE_DAYS,
+)
 from entity.user_entity import User
 from helpers.bcrypt_helper import encrypt_password, compare_password
 
@@ -20,17 +24,20 @@ async def login_service(db: Session, email: str, password: str):
         if not is_match:
             return [None, create_error("password", "La contraseña es incorrecta")]
 
+        now = datetime.now(timezone.utc)
         payload = {
             "nombre_completo": user.nombre_completo,
             "email": user.email,
             "rut": user.rut,
             "rol": user.rol,
+            "iat": now,
+            "exp": now + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS),
         }
 
         access_token = jwt.encode(
             payload,
             ACCESS_TOKEN_SECRET,
-            algorithm="HS256"
+            algorithm=ACCESS_TOKEN_ALGORITHM
         )
 
         user_data = {

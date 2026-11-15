@@ -1,14 +1,23 @@
+import os
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone, timedelta
 
 from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte, Infraccion
 from entity.user_entity import User
-from helpers.storage_helper import guardar_video, eliminar_carpeta_reporte
+from entity.reporte_validacion_entity import EstadoAnalisis
+from helpers.storage_helper import guardar_video, guardar_metadatos, eliminar_carpeta_reporte, get_ruta_absoluta
+from helpers.url_firmada_helper import ruta_permitida
+from helpers.metadatos_helper import parsear_metadatos
 from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
 from helpers.pdf_generator_helper import generar_pdf_informe
+from services.notificacion_service import crear_notificacion
 
 MAX_REPORTES_POR_USUARIO = 10
-DIAS_MINIMOS_ELIMINACION = 60
+DIAS_MINIMOS_ELIMINACION = 7
+
+# Un análisis que lleva más que esto sin novedades se considera estancado
+# (backend-ia caído o callback perdido) y se permite relanzarlo.
+ANALISIS_VIGENTE = timedelta(minutes=10)
 
 TRANSICIONES_VALIDAS = {
     EstadoReporte.enviado:    {EstadoReporte.recibido, EstadoReporte.aprobado, EstadoReporte.rechazado},
@@ -34,6 +43,7 @@ async def crear_reporte_service(
     titulo: str,
     comentario: str,
     archivos: list,
+    metadatos: str | None = None,
 ):
     try:
         total_actual = db.query(Reporte).filter(Reporte.usuario_id == usuario_id).count()
@@ -55,14 +65,28 @@ async def crear_reporte_service(
         db.add(nuevo_reporte)
         db.flush()
 
+        # Ubicación y hora de cada clip (opcional). Nunca hace fallar la creación.
+        datos_clips = parsear_metadatos(metadatos, len(archivos))
+
         for index, archivo in enumerate(archivos, start=1):
+            datos = datos_clips[index - 1]
             ruta_relativa = guardar_video(usuario_id, nuevo_reporte.id, index, archivo)
             video = VideoReporte(
                 reporte_id=nuevo_reporte.id,
                 video_path=ruta_relativa,
                 orden=index,
+                lat=datos["lat"],
+                lon=datos["lon"],
+                grabado_en=datos["grabado_en"],
             )
             db.add(video)
+
+            if datos["documento"] is not None:
+                try:
+                    guardar_metadatos(usuario_id, nuevo_reporte.id, index, datos["documento"])
+                except OSError as error:
+                    # El JSON es un respaldo para el dataset: si falla, el reporte se crea igual.
+                    print(f"No se pudo guardar el JSON del video {index}: {error}")
 
         db.commit()
         db.refresh(nuevo_reporte)
@@ -113,6 +137,36 @@ async def get_reporte_service(db: Session, usuario_id: int, reporte_id: int):
 
     except Exception as error:
         print(f"Error al obtener reporte: {error}")
+        return [None, "Error interno del servidor"]
+
+
+async def get_pdf_reporte_service(db: Session, usuario_id: int, reporte_id: int):
+    """
+    Ruta absoluta del PDF del informe, solo si el reporte es del usuario. Para quien no es
+    el dueño se responde igual que si no existiera: no se revela qué ids hay.
+    """
+    try:
+        reporte = (
+            db.query(Reporte)
+            .filter(Reporte.id == reporte_id, Reporte.usuario_id == usuario_id)
+            .first()
+        )
+        if not reporte:
+            return [None, "Reporte no encontrado"]
+
+        # ruta_permitida: defensa extra aunque pdf_path lo escribe siempre el backend
+        if not reporte.pdf_path or not ruta_permitida(reporte.pdf_path):
+            return [None, "Este reporte aún no tiene PDF disponible"]
+
+        ruta = get_ruta_absoluta(reporte.pdf_path)
+        if not os.path.isfile(ruta):
+            print(f"El PDF del reporte {reporte_id} figura en la base pero no está en el storage: {ruta}")
+            return [None, "Este reporte aún no tiene PDF disponible"]
+
+        return [ruta, None]
+
+    except Exception as error:
+        print(f"Error al obtener el PDF del reporte: {error}")
         return [None, "Error interno del servidor"]
 
 
@@ -197,6 +251,41 @@ async def listar_reportes_admin_service(db, estado: str = None, usuario_id: int 
         return [None, "Error interno del servidor"]
 
 
+def analisis_en_curso(validacion) -> bool:
+    """True si hay un análisis corriendo y no se ha estancado todavía."""
+    if validacion is None or validacion.estado_analisis != EstadoAnalisis.analizando:
+        return False
+    ultima_novedad = validacion.actualizado_en
+    if ultima_novedad is None:
+        return True
+    if ultima_novedad.tzinfo is None:
+        ultima_novedad = ultima_novedad.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - ultima_novedad < ANALISIS_VIGENTE
+
+
+def marcar_analisis_estancado(db, reporte) -> None:
+    """
+    Si el análisis lleva más de ANALISIS_VIGENTE sin novedades, lo pasa a 'error'.
+    El panel ya ofrece "Reintentar" para ese estado y deja de consultar solo, así
+    que un callback perdido ya no deja el reporte esperando para siempre.
+    """
+    validacion = reporte.validacion
+    if (
+        reporte.estado != EstadoReporte.analizando
+        or validacion is None
+        or validacion.estado_analisis != EstadoAnalisis.analizando
+        or analisis_en_curso(validacion)
+    ):
+        return
+    minutos = int(ANALISIS_VIGENTE.total_seconds() // 60)
+    validacion.estado_analisis = EstadoAnalisis.error
+    validacion.notas_ia = (
+        f"El análisis no respondió en {minutos} minutos (backend-ia caído o resultado perdido)."
+    )
+    db.commit()
+    db.refresh(reporte)
+
+
 async def get_reporte_admin_service(db, reporte_id: int):
     try:
         reporte = (
@@ -212,6 +301,8 @@ async def get_reporte_admin_service(db, reporte_id: int):
             db.commit()
             db.refresh(reporte)
 
+        marcar_analisis_estancado(db, reporte)
+
         return [serializar_reporte_admin(reporte), None]
 
     except Exception as error:
@@ -221,7 +312,8 @@ async def get_reporte_admin_service(db, reporte_id: int):
 
 async def validar_reporte_service(
     db, admin, reporte_id: int, severidad_validada: str,
-    infraccion_ids: list[int], infracciones_manuales: list[str], notas_admin: str | None,
+    infraccion_ids: list[int], infracciones_manuales: list[str],
+    patente_confirmada: str | None, notas_admin: str | None,
 ):
     try:
         reporte = db.query(Reporte).filter(Reporte.id == reporte_id).first()
@@ -233,20 +325,24 @@ async def validar_reporte_service(
 
         infracciones = []
         if infraccion_ids:
-            infracciones += db.query(Infraccion).filter(Infraccion.id.in_(infraccion_ids)).all()
-        for texto in (infracciones_manuales or []):
-            manual = Infraccion(articulo="Manual", descripcion=texto)
-            db.add(manual)
-            db.flush()
-            infracciones.append(manual)
+            infracciones = db.query(Infraccion).filter(Infraccion.id.in_(infraccion_ids)).all()
 
         reporte.severidad_validada = severidad_validada
+        # Las infracciones manuales ya no se mezclan con el catálogo: van en el propio reporte.
+        reporte.infracciones_manuales = infracciones_manuales or []
+        reporte.patente_confirmada = patente_confirmada
         reporte.notas_admin = notas_admin
         reporte.infracciones = infracciones
         reporte.estado = EstadoReporte.aprobado
         reporte.finalizado_at = datetime.now(timezone.utc)
         reporte.validado_por_id = admin.id
         reporte.pdf_path = generar_pdf_informe(reporte)
+
+        crear_notificacion(
+            db, reporte.usuario_id,
+            f"Tu reporte \"{reporte.titulo}\" fue aprobado.",
+            reporte_id=reporte.id,
+        )
 
         db.commit()
         db.refresh(reporte)
@@ -271,6 +367,12 @@ async def rechazar_reporte_service(db, admin, reporte_id: int, notas_admin: str)
         reporte.estado = EstadoReporte.rechazado
         reporte.finalizado_at = datetime.now(timezone.utc)
         reporte.validado_por_id = admin.id
+
+        crear_notificacion(
+            db, reporte.usuario_id,
+            f"Tu reporte \"{reporte.titulo}\" fue rechazado.",
+            reporte_id=reporte.id,
+        )
 
         db.commit()
         db.refresh(reporte)
@@ -308,7 +410,13 @@ async def eliminar_reporte_admin_service(db, reporte_id: int):
 
 async def listar_infracciones_catalogo_service(db):
     try:
-        infracciones = db.query(Infraccion).order_by(Infraccion.id).all()
+        # Se excluyen las filas "Manual" que dejaba la versión anterior al validar.
+        infracciones = (
+            db.query(Infraccion)
+            .filter(Infraccion.articulo != "Manual")
+            .order_by(Infraccion.id)
+            .all()
+        )
         return [
             [{"id": i.id, "articulo": i.articulo, "descripcion": i.descripcion} for i in infracciones],
             None,

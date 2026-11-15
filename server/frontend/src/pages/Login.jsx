@@ -23,20 +23,20 @@ const Login = () => {
   };
 
   return (
-    <main style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface-1)' }}>
-      <div className="card" style={{ width: '100%', maxWidth: 340, overflow: 'hidden' }}>
-        <div style={{ height: 5, display: 'flex' }}>
-          <div style={{ flex: 1, background: 'var(--cl-blue)' }} />
-          <div style={{ flex: 1, background: '#fff' }} />
-          <div style={{ flex: 1, background: 'var(--cl-red)' }} />
-        </div>
-        <div style={{ padding: '2rem 1.75rem' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, marginBottom: '1.5rem' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--cl-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <ShieldCheck size={24} color="#fff" />
+    <main className="login">
+      <div className="panel login-card">
+        <div className="panel__core">
+          <div className="login-stripe" aria-hidden="true">
+            <span style={{ background: 'var(--cl-blue)' }} />
+            <span style={{ background: '#fff' }} />
+            <span style={{ background: 'var(--cl-red)' }} />
+          </div>
+          <div className="login-brand">
+            <div className="login-logo">
+              <ShieldCheck size={26} color="#fff" />
             </div>
-            <h3 style={{ margin: '8px 0 0' }}>DriveCheckCL</h3>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>Panel de administración</p>
+            <h1 className="login-title">DriveCheckCL</h1>
+            <p className="login-sub">Panel de administración</p>
           </div>
 
           <Form

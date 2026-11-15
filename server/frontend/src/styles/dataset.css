@@ -1,0 +1,44 @@
+/* Página de administración del dataset */
+.ds-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem; margin-bottom: 1.25rem;
+}
+.ds-card__label {
+  margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.ds-card__value { margin: 0.35rem 0 0.15rem; font-size: 2.25rem; line-height: 1; font-weight: 700; letter-spacing: -0.02em; }
+.ds-card__sub { margin: 0; font-size: 13px; color: var(--text-secondary); }
+
+.ds-section { margin-bottom: 1.5rem; }
+.ds-list { display: flex; flex-direction: column; }
+.ds-list__row {
+  display: flex; justify-content: space-between; gap: 1rem;
+  padding: 0.55rem 0; border-bottom: 1px solid var(--line); font-size: 14px;
+}
+.ds-list__row:last-child { border-bottom: 0; }
+.ds-list__row strong { font-variant-numeric: tabular-nums; }
+
+.ds-notice {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;
+  margin-bottom: 0.75rem; padding: 0.85rem 1.1rem; border-radius: var(--radius); font-size: 14px;
+}
+.ds-notice--warn { background: var(--cl-amber-100); color: var(--cl-amber-800); }
+.ds-notice--info { background: var(--cl-blue-100); color: var(--cl-blue-800); }
+.ds-notice--error { background: var(--cl-red-100); color: var(--cl-red-800); }
+
+.cell-muted { color: var(--text-muted); }
+
+/* Ventana de edición de etiquetas (reusa .bg y .popup de popup.css) */
+.popup.popup--wide { max-width: 560px; }
+.ds-popup__title { margin: 0 2.5rem 0.25rem 0; font-size: 20px; letter-spacing: -0.01em; }
+.ds-popup__sub { margin: 0 0 0.5rem; font-size: 13px; color: var(--text-muted); word-break: break-all; }
+.ds-popup__note { margin: 0 0 1.1rem; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+.ds-field { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+.ds-field > label, .ds-field__label { font-size: 13px; font-weight: 700; }
+.ds-check { display: flex; align-items: center; gap: 0.6rem; font-size: 14px; cursor: pointer; }
+.ds-check input[type="checkbox"] {
+  width: 18px; height: 18px; padding: 0; flex: none; box-shadow: none; accent-color: var(--cl-blue);
+}
+.ds-popup__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: flex-end; margin-top: 1.25rem; }
+.ds-popup__actions .ds-reset { margin-right: auto; }

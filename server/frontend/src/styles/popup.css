@@ -1,13 +1,26 @@
 .bg {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-  display: flex; align-items: center; justify-content: center; z-index: 50;
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(11, 27, 58, 0.35);
+  backdrop-filter: blur(6px);
+  animation: page-in 0.3s var(--ease) both;
 }
 .popup {
-  position: relative; background: #fff; border-radius: 14px;
-  max-width: 420px; width: 90%; max-height: 85vh; overflow-y: auto;
-  padding: 1.75rem 1.5rem;
+  position: relative; width: 90%; max-width: 440px; max-height: 85vh; overflow-y: auto;
+  padding: 2rem 1.75rem;
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: 0 0 0 6px rgba(237, 242, 251, 0.9), 0 40px 80px -30px rgba(0, 57, 166, 0.55);
+  animation: popup-in 0.45s var(--ease) both;
+}
+@keyframes popup-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
 }
 .popup .close {
-  position: absolute; top: 12px; right: 12px; width: 28px; height: 28px;
-  border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--text-muted);
+  position: absolute; top: 14px; right: 14px; width: 36px; height: 36px;
+  border: 0; border-radius: 50%; background: transparent;
+  font-size: 16px; cursor: pointer; color: var(--text-muted);
+  transition: background 0.3s var(--ease);
 }
+.popup .close:hover { background: var(--surface-1); color: var(--ink); }

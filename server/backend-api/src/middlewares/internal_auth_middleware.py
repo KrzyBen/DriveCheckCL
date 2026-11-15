@@ -1,3 +1,5 @@
+import secrets
+
 from fastapi import Header, HTTPException, status
 from config.configEnv import INTERNAL_API_KEY
 
@@ -9,7 +11,9 @@ def verify_internal_key(x_internal_key: str = Header(default=None)):
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Canal interno no configurado (falta INTERNAL_API_KEY)."
         )
-    if x_internal_key != INTERNAL_API_KEY:
+    if not secrets.compare_digest(
+        (x_internal_key or "").encode("utf-8"), INTERNAL_API_KEY.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Clave interna inválida."

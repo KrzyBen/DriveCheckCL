@@ -16,8 +16,8 @@ class EstadoAnalisis(str, enum.Enum):
 class ReporteValidacion(Base):
     """
     Intermediario entre el reporte que envía el conductor (Reporte) y la decisión
-    final del admin. Acá escriben tanto backend-ia (resultados_ia) como el admin
-    (los campos "de trabajo" antes de aprobar/rechazar el Reporte).
+    final del admin. Acá escribe solo el sistema de análisis (resultados_ia y los
+    mensajes sobre el análisis); lo que edita el admin vive en Reporte.
 
     resultados_ia es JSONB a propósito: cada modelo/capa nueva de backend-ia
     agrega su propia clave (ej. resultados_ia["patente"], resultados_ia["accidentes"])
@@ -33,15 +33,14 @@ class ReporteValidacion(Base):
 
     estado_analisis = Column(SqlEnum(EstadoAnalisis), nullable=False, default=EstadoAnalisis.pendiente)
 
-    # Resultados crudos de la IA, por capa. Ej:
-    # {"accidentes": {"confianza": 0.87, "severidad": "grave"},
-    #  "patente": {"texto": "ABCD12", "confianza": 0.91}}
+    # Resultados de la IA con el contrato version 1 (ver backend-ia/src/contrato.py). Ej:
+    # {"version": 1, "capas": {
+    #     "patente": {"estado": "ok", "hallazgo": "detectada", "confianza": 0.77, "video": 1,
+    #                 "detalle": {"texto": "BCDF12", "formato_valido": true}},
+    #     "imprudencias": {"estado": "error", "codigo": "video_ilegible"}}}
     resultados_ia = Column(JSONB, nullable=True)
 
-    # Campos "de trabajo": la IA propone un valor inicial, el admin puede editarlos
-    # libremente antes de aprobar/rechazar el reporte (ese paso final sigue viviendo en Reporte).
-    patente_confirmada = Column(String(20), nullable=True)
-    severidad_propuesta = Column(String(20), nullable=True)
+    # Mensaje del propio sistema sobre el análisis (por ejemplo, por qué falló).
     notas_ia = Column(String(1000), nullable=True)
 
     actualizado_en = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

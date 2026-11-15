@@ -5,23 +5,22 @@ import cv2
 from ultralytics import YOLO
 
 from config import MODELOS_DIR, N_FRAMES
+from video_utils import abrir_video, enderezar
+
+
+class VideoIlegibleError(Exception):
+    """El video existe pero no se pudo leer ningun frame."""
 
 
 class AnalizadorBase:
     """
-    Clase base para cada capa de IA (accidentes, imprudencias, patente).
+    Una capa de analisis (imprudencias, patente...). Cada capa vive en
+    modelos/<nombre>/ con su modelo.onnx y su metadata.json, y devuelve por
+    cada video un resultado con la forma del contrato (ver contrato.py):
 
-    Cada capa nueva solo necesita heredar de esta clase e implementar
-    `analizar_frames(self, frames)`. Todo lo comun (cargar el modelo,
-    leer su metadata.json, extraer frames del video) ya esta resuelto
-    aca, para que agregar una capa mas no implique repetir ese trabajo.
+        {"hallazgo": str, "confianza": float, "detalle": dict}
 
-    Se usa la libreria ultralytics para correr el .onnx (no onnxruntime
-    directo): ultralytics ya resuelve la decodificacion de cajas y el
-    NMS de YOLO de forma correcta, y escribir eso a mano es una fuente
-    comun de bugs dificiles de encontrar. El costo es una imagen de
-    Docker mas pesada; para el tamano de este proyecto vale la pena
-    priorizar que funcione bien por sobre ahorrar espacio.
+    El orquestador agrega el numero de video y elige entre los videos del reporte.
     """
 
     nombre = "base"
@@ -46,38 +45,55 @@ class AnalizadorBase:
         self.modelo = YOLO(ruta_onnx)
         print(f"[{self.nombre}] Modelo cargado desde {ruta_onnx}")
 
-    def extraer_frames(self, video_path: str, cantidad: int = N_FRAMES):
-        """Muestrea 'cantidad' frames repartidos a lo largo del video."""
-        captura = cv2.VideoCapture(video_path)
-        total_frames = int(captura.get(cv2.CAP_PROP_FRAME_COUNT))
+    def nombres_de_clases(self) -> dict:
+        """Clases segun el propio modelo (model.names); si no las trae, las de metadata.json."""
+        nombres = getattr(self.modelo, "names", None)
+        if nombres:
+            return {int(i): str(n) for i, n in dict(nombres).items()}
+        return {i: str(n) for i, n in enumerate(self.metadata.get("clases", []))}
 
-        if total_frames <= 0:
-            captura.release()
+    def extraer_frames(self, video_path: str, cantidad: int = N_FRAMES):
+        """
+        Devuelve hasta `cantidad` frames repartidos a lo largo del clip, ya enderezados
+        según el metadato de rotación (los clips de Android vienen girados 90°).
+        Si el video no se puede abrir o no tiene frames, devuelve [] y analizar()
+        lanza VideoIlegibleError.
+        """
+        # Se abre sin rotación automática y se lee el metadato, igual que en el anonimizador
+        try:
+            captura, rotacion = abrir_video(video_path)
+        except IOError:
+            # Se mantiene el comportamiento anterior: un video que no abre cuenta como
+            # ilegible solo para ese video, no como error interno de toda la capa
             return []
 
-        indices = [int(i * total_frames / cantidad) for i in range(cantidad)]
         frames = []
-        for indice in indices:
-            captura.set(cv2.CAP_PROP_POS_FRAMES, indice)
-            ok, frame = captura.read()
-            if ok:
-                frames.append(frame)
+        try:
+            total_frames = int(captura.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total_frames <= 0:
+                return []
 
-        captura.release()
+            indices = [int(i * total_frames / cantidad) for i in range(cantidad)]
+            for indice in indices:
+                captura.set(cv2.CAP_PROP_POS_FRAMES, indice)
+                ok, frame = captura.read()
+                if ok:
+                    # Con rotación 0 enderezar devuelve el mismo frame: comportamiento idéntico al anterior
+                    frames.append(enderezar(frame, rotacion))
+        finally:
+            captura.release()
         return frames
 
     def analizar(self, video_path: str) -> dict:
-        """Punto de entrada usado por el orquestador."""
+        """Analiza un video. Lanza VideoIlegibleError si no se pudo leer ningun frame."""
         if not self.disponible:
-            return {"disponible": False}
+            raise RuntimeError(f"La capa {self.nombre} no tiene modelo cargado")
 
         frames = self.extraer_frames(video_path)
         if not frames:
-            return {"disponible": True, "error": "No se pudieron leer frames del video"}
+            raise VideoIlegibleError(video_path)
 
         return self.analizar_frames(frames)
 
     def analizar_frames(self, frames) -> dict:
-        """Cada capa concreta implementa esto: recibe una lista de frames
-        (arrays de OpenCV, formato BGR) y devuelve el resultado de su capa."""
         raise NotImplementedError

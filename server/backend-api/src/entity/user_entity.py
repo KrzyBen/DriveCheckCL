@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, text
 from sqlalchemy.sql import func
 from config.configDb import Base
 
@@ -14,9 +14,18 @@ class User(Base):
 
     email = Column(String(255), nullable=False, unique=True, index=True)
 
-    rol = Column(String(50), nullable=False, default="usuario")
+    # Rol por defecto "conductor": coincide con los roles válidos del sistema
+    # (administrador, validador, conductor) definidos en user_validation.py.
+    rol = Column(String(50), nullable=False, default="conductor")
 
     password = Column(String(255), nullable=False)
+
+    # Consentimiento para usar los videos en el estudio/dataset (opcional).
+    consentimiento_estudio = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    consentimiento_version = Column(Integer, nullable=True)
+    consentimiento_fecha = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

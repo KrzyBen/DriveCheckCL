@@ -59,6 +59,7 @@ async def validar_reporte(
             severidad_validada=body.severidad_validada,
             infraccion_ids=body.infraccion_ids,
             infracciones_manuales=body.infracciones_manuales,
+            patente_confirmada=body.patente_confirmada,
             notas_admin=body.notas_admin,
         )
         if error:

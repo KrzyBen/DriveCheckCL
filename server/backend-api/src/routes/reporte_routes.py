@@ -5,6 +5,7 @@ from controllers.reporte_controller import (
     crear_reporte,
     listar_mis_reportes,
     get_reporte,
+    get_pdf_reporte,
     eliminar_reporte,
     contar_reportes,
 )
@@ -14,5 +15,7 @@ router = APIRouter(dependencies=[Depends(authenticate_jwt)])
 router.add_api_route("/contar",        contar_reportes,     methods=["GET"])
 router.add_api_route("/crear",         crear_reporte,       methods=["POST"])
 router.add_api_route("/mis-reportes",  listar_mis_reportes, methods=["GET"])
+# Antes de "/{reporte_id}": las rutas con más segmentos van primero para que el orden sea evidente
+router.add_api_route("/{reporte_id}/pdf", get_pdf_reporte,  methods=["GET"])
 router.add_api_route("/{reporte_id}",  get_reporte,         methods=["GET"])
 router.add_api_route("/{reporte_id}",  eliminar_reporte,    methods=["DELETE"])

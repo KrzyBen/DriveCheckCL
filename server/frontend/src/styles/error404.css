@@ -1,5 +1,5 @@
-.error_404 { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--surface-1); }
-.error_404 .card { text-align: center; padding: 3rem 2.5rem; }
-.error_404 h1 { font-size: 64px; color: var(--cl-blue); margin: 0; }
-.error_404 h3 { color: var(--cl-blue-800); margin: 8px 0; }
+.error_404 { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.error_404 .card { text-align: center; padding: 3rem 2.5rem; box-shadow: var(--shadow-md); }
+.error_404 h1 { font-size: 120px; line-height: 1; color: var(--cl-blue); margin: 0; }
+.error_404 h3 { font-size: 28px; color: var(--cl-blue-800); margin: 8px 0; }
 .error_404 h4 { color: var(--text-muted); font-weight: 400; }

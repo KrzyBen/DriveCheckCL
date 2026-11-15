@@ -1,48 +1,86 @@
+/* Marco de doble bisel alrededor de la tabla (28 = 22 + 6).
+   --row-h debe coincidir con rowHeight en hooks/table/useTable.jsx */
 .table-container {
-  border: 0.5px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+  --row-h: 60px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-bezel);
+  box-shadow: var(--shadow-md);
+}
+.table-container__core { border-radius: var(--radius-md); background: #fff; overflow: hidden; }
+
+/* Los selectores llevan .table-container delante para ganarle en especificidad
+   a tabulator.min.css sin depender del orden de carga. */
+.table-container .tabulator {
+  font-size: 14px; border: 0; background: #fff; color: var(--ink);
+}
+.table-container .tabulator .tabulator-header {
+  background: #F5F8FD; border-bottom: 1px solid var(--line);
+  color: var(--text-secondary); font-weight: 600;
+}
+.table-container .tabulator .tabulator-header .tabulator-col {
+  background: transparent; border-right: 0; color: var(--text-secondary);
+}
+.table-container .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding: 14px 18px; }
+.table-container .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+  font-size: 12px; letter-spacing: 0.03em;
+}
+.table-container .tabulator .tabulator-header .tabulator-col.tabulator-sortable.tabulator-col-sorter-element:hover {
+  background: #EBF1FB;
+}
+.table-container .tabulator .tabulator-header .tabulator-col[aria-sort='ascending'] .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-bottom-color: var(--cl-blue); }
+.table-container .tabulator .tabulator-header .tabulator-col[aria-sort='descending'] .tabulator-col-content .tabulator-col-sorter .tabulator-arrow { border-top-color: var(--cl-blue); }
+
+.table-container .tabulator .tabulator-row,
+.table-container .tabulator .tabulator-row.tabulator-row-even {
+  background: #fff; border-bottom: 1px solid var(--line);
+  transition: background 0.4s var(--ease);
+}
+.table-container .tabulator .tabulator-row:hover { background: #F6F9FF; }
+.table-container .tabulator .tabulator-row.tabulator-selected { background: var(--cl-blue-100); }
+/* line-height = alto de fila: centra el texto, los badges y los botones en vertical */
+.table-container .tabulator .tabulator-row .tabulator-cell {
+  border-right: 0; padding: 0 18px; line-height: calc(var(--row-h) - 1px);
 }
 
-.tabulator {
-  font-size: 13px;
-  border: none;
-  background: var(--surface-2);
-}
-.tabulator .tabulator-header {
-  background: var(--surface-1);
-  border-bottom: 0.5px solid var(--border);
-}
-.tabulator .tabulator-col {
-  background: var(--surface-1);
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-.tabulator .tabulator-row {
-  border-top: 0.5px solid var(--border);
-}
-.tabulator .tabulator-row.tabulator-selected {
-  background: var(--cl-blue-100);
-}
-.tabulator .tabulator-footer {
-  background: var(--surface-1);
-  border-top: 0.5px solid var(--border);
-}
-.tabulator .tabulator-page.active {
-  background: var(--cl-blue);
-  color: #fff;
+.table-container .tabulator .tabulator-placeholder .tabulator-placeholder-contents {
+  color: var(--text-muted); font-size: 14px; font-weight: 500;
 }
 
+.table-container .tabulator .tabulator-footer {
+  background: #F5F8FD; border-top: 1px solid var(--line);
+  color: var(--text-secondary); font-weight: 500;
+}
+.table-container .tabulator .tabulator-footer .tabulator-footer-contents { padding: 12px 18px; }
+.table-container .tabulator .tabulator-footer .tabulator-page {
+  min-width: 36px; height: 36px; margin: 0 3px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: #fff; color: var(--ink); font: 600 13px/1 var(--font-ui);
+  transition: background 0.3s var(--ease), transform 0.5s var(--ease);
+}
+.table-container .tabulator .tabulator-footer .tabulator-page:not(:disabled):hover { background: #EEF3FC; color: var(--ink); }
+.table-container .tabulator .tabulator-footer .tabulator-page.active,
+.table-container .tabulator .tabulator-footer .tabulator-page.active:hover {
+  background: var(--cl-blue); border-color: var(--cl-blue); color: #fff;
+  box-shadow: 0 8px 14px -6px rgba(0, 57, 166, 0.5);
+}
+.table-container .tabulator .tabulator-footer .tabulator-page:disabled { opacity: 0.45; }
+
+.table-container .tabulator .tabulator-row .tabulator-cell.cell-id {
+  font-weight: 700; color: var(--cl-blue); font-variant-numeric: tabular-nums;
+}
+.table-container .tabulator .tabulator-row .tabulator-cell.cell-title { font-weight: 600; }
+
+/* Botones de acción: íconos SVG (src/helpers/icons.js), ya no emoji */
 .table-action-btn {
-  border: 0.5px solid var(--border);
-  background: #fff;
-  border-radius: 6px;
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  margin-right: 4px;
-  font-size: 13px;
+  width: 40px; height: 40px; margin-left: 6px; padding: 0;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: #fff; color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  vertical-align: middle; line-height: 1;
+  box-shadow: 0 1px 2px rgba(4, 44, 83, 0.06), 0 4px 8px -4px rgba(0, 57, 166, 0.25);
+  transition: transform 0.5s var(--ease), background 0.3s var(--ease);
 }
+.table-action-btn:hover:not(:disabled) { transform: translateY(-2px); background: #F6F9FF; }
+.table-action-btn--danger { color: var(--cl-red-700); }
+.table-action-btn:disabled { opacity: 0.38; cursor: not-allowed; box-shadow: none; }
