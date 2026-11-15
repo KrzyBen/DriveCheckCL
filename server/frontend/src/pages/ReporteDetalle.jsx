@@ -7,6 +7,7 @@ import useRechazarReporte from '@hooks/reportes/useRechazarReporte.jsx';
 import useAnalizarReporte from '@hooks/reportes/useAnalizarReporte.jsx';
 import RechazarReportePopup from '@components/RechazarReportePopup';
 import { getInfracciones } from '@services/infraction.service.js';
+import { showErrorAlert } from '@helpers/sweetAlert.js';
 
 const stateLabels = { enviado: 'Enviado', recibido: 'Recibido', analizando: 'Analizando', aprobado: 'Aprobado', rechazado: 'Rechazado' };
 const badgeClass = { enviado: 'badge-neutral', recibido: 'badge-neutral', analizando: 'badge-blue badge-live', aprobado: 'badge-green', rechazado: 'badge-red' };
@@ -35,6 +36,19 @@ const ERRORES_CAPA = {
 };
 
 const backendOrigin = import.meta.env.VITE_BASE_URL.replace(/\/api\/?$/, '');
+
+// Las URLs de archivos llegan firmadas desde el backend ('/storage/...?exp=..&sig=..')
+const urlArchivo = (url) => (url ? `${backendOrigin}${url}` : null);
+
+// true si la URL firmada ya venció o vence en menos de `margenS` segundos (lee su ?exp=)
+const urlVencida = (url, margenS = 30) => {
+  try {
+    const exp = Number(new URL(url, backendOrigin).searchParams.get('exp'));
+    return !exp || exp * 1000 <= Date.now() + margenS * 1000;
+  } catch {
+    return true;
+  }
+};
 
 // Abre el punto del evento en OpenStreetMap (enlace externo, sin librerías de mapa).
 const urlMapa = ({ lat, lon }) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`;
@@ -69,6 +83,27 @@ const ReporteDetalle = () => {
   const [analizando, setAnalizando] = useState(false);
 
   const pollRef = useRef(null);
+
+  // ── Video del clip activo ──
+  // El src se fija solo al cambiar de clip (video.id), no con cada refresco del reporte: así el
+  // polling de 3 s del análisis no recarga el <video> aunque el backend entregue una URL nueva.
+  const videoActual = reporte?.videos?.[clipActivo];
+  const videoRef = useRef(null);
+  const [srcVideo, setSrcVideo] = useState(null);
+  const [errorVideo, setErrorVideo] = useState(false);
+  const reproduciendoRef = useRef(false); // se lleva con onPlay/onPause: tras un error `paused` no es fiable
+  const reintentandoRef = useRef(false);  // un solo reintento por error, para no entrar en bucle
+  const reanudarRef = useRef(null);       // { tiempo, reproduciendo } a restaurar con la URL nueva
+
+  useEffect(() => {
+    setSrcVideo(urlArchivo(videoActual?.url));
+    setErrorVideo(false);
+    reintentandoRef.current = false;
+    reanudarRef.current = null;
+    reproduciendoRef.current = false;
+    // Solo depende del id: un refresco del mismo clip no debe cambiar el src
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoActual?.id]);
 
   useEffect(() => {
     if (!reporte) return;
@@ -147,6 +182,50 @@ const ReporteDetalle = () => {
 
   const onAnalizar = () => handleAnalizar(reporte.id);
 
+  // La URL del video venció (403) o falló la carga: se pide una URL nueva y se retoma donde iba
+  const onErrorVideo = async () => {
+    const elemento = videoRef.current;
+    if (!elemento || reintentandoRef.current) { setErrorVideo(true); return; }
+    reintentandoRef.current = true;
+    reanudarRef.current = { tiempo: elemento.currentTime, reproduciendo: reproduciendoRef.current };
+    const idVideo = videoActual?.id;
+    const nuevo = await fetchReporte({ silencioso: true });
+    const src = urlArchivo(nuevo?.videos?.find((v) => v.id === idVideo)?.url);
+    // Si no hay URL o es la misma que falló, no hay nada que reintentar
+    if (!src || src === srcVideo) { setErrorVideo(true); return; }
+    setSrcVideo(src);
+  };
+
+  // Cargó la URL (nueva o no): se restaura la posición y se rearma el reintento para un error futuro
+  const onVideoCargado = () => {
+    const elemento = videoRef.current;
+    const reanudar = reanudarRef.current;
+    reanudarRef.current = null;
+    reintentandoRef.current = false;
+    setErrorVideo(false);
+    if (!elemento || !reanudar) return;
+    elemento.currentTime = reanudar.tiempo;
+    // play() puede rechazarse (p. ej. política de reproducción automática): se deja en pausa
+    if (reanudar.reproduciendo) elemento.play().catch(() => {});
+  };
+
+  // PDF: si la URL firmada ya venció, se pide una nueva antes de abrirlo
+  const onAbrirPdf = async (e) => {
+    if (!urlVencida(reporte.pdf_url)) return; // vigente: el enlace abre normalmente
+    e.preventDefault();
+    // La pestaña se abre ya, dentro del clic: abrirla después del await la bloquearía el navegador
+    const ventana = window.open('', '_blank');
+    if (ventana) ventana.opener = null; // igual que rel="noreferrer": la pestaña no controla el panel
+    const nuevo = await fetchReporte({ silencioso: true });
+    const url = urlArchivo(nuevo?.pdf_url);
+    if (ventana && url) {
+      ventana.location.href = url;
+    } else {
+      ventana?.close();
+      showErrorAlert('No se pudo abrir el PDF', 'Inténtalo de nuevo en unos segundos.');
+    }
+  };
+
   return (
     <div className="page-enter">
       <div className="page-head">
@@ -169,11 +248,19 @@ const ReporteDetalle = () => {
           <div className="panel">
             <div className="video-frame">
               <video
-                key={reporte.videos[clipActivo]?.id}
-                src={`${backendOrigin}/storage/${reporte.videos[clipActivo]?.path}`}
+                key={videoActual?.id}
+                ref={videoRef}
+                src={srcVideo || undefined}
                 controls
+                onError={onErrorVideo}
+                onLoadedMetadata={onVideoCargado}
+                onPlay={() => { reproduciendoRef.current = true; }}
+                onPause={() => { reproduciendoRef.current = false; }}
               />
             </div>
+            {errorVideo && (
+              <p className="ia-error">No se pudo cargar el video. Recarga la página para intentarlo de nuevo.</p>
+            )}
           </div>
           <div className="clip-tabs">
             {reporte.videos.map((v, idx) => (
@@ -294,8 +381,8 @@ const ReporteDetalle = () => {
               )}
               {reporte.patente_confirmada && <p className="final__line">Patente: {reporte.patente_confirmada}</p>}
               {notas && <p className="final__line">Notas: {notas}</p>}
-              {reporte.pdf_disponible && (
-                <a className="btn" href={`${backendOrigin}/storage/${reporte.pdf_path}`} target="_blank" rel="noreferrer">
+              {reporte.pdf_disponible && reporte.pdf_url && (
+                <a className="btn" href={urlArchivo(reporte.pdf_url)} target="_blank" rel="noreferrer" onClick={onAbrirPdf}>
                   <Download size={15} /> Ver PDF
                 </a>
               )}
