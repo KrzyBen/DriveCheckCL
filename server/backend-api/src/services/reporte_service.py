@@ -1,10 +1,12 @@
+import os
 from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timezone, timedelta
 
 from entity.reporte_entity import Reporte, VideoReporte, EstadoReporte, Infraccion
 from entity.user_entity import User
 from entity.reporte_validacion_entity import EstadoAnalisis
-from helpers.storage_helper import guardar_video, guardar_metadatos, eliminar_carpeta_reporte
+from helpers.storage_helper import guardar_video, guardar_metadatos, eliminar_carpeta_reporte, get_ruta_absoluta
+from helpers.url_firmada_helper import ruta_permitida
 from helpers.metadatos_helper import parsear_metadatos
 from helpers.reporte_serializer import serializar_reporte, serializar_reporte_admin
 from helpers.pdf_generator_helper import generar_pdf_informe
@@ -135,6 +137,36 @@ async def get_reporte_service(db: Session, usuario_id: int, reporte_id: int):
 
     except Exception as error:
         print(f"Error al obtener reporte: {error}")
+        return [None, "Error interno del servidor"]
+
+
+async def get_pdf_reporte_service(db: Session, usuario_id: int, reporte_id: int):
+    """
+    Ruta absoluta del PDF del informe, solo si el reporte es del usuario. Para quien no es
+    el dueño se responde igual que si no existiera: no se revela qué ids hay.
+    """
+    try:
+        reporte = (
+            db.query(Reporte)
+            .filter(Reporte.id == reporte_id, Reporte.usuario_id == usuario_id)
+            .first()
+        )
+        if not reporte:
+            return [None, "Reporte no encontrado"]
+
+        # ruta_permitida: defensa extra aunque pdf_path lo escribe siempre el backend
+        if not reporte.pdf_path or not ruta_permitida(reporte.pdf_path):
+            return [None, "Este reporte aún no tiene PDF disponible"]
+
+        ruta = get_ruta_absoluta(reporte.pdf_path)
+        if not os.path.isfile(ruta):
+            print(f"El PDF del reporte {reporte_id} figura en la base pero no está en el storage: {ruta}")
+            return [None, "Este reporte aún no tiene PDF disponible"]
+
+        return [ruta, None]
+
+    except Exception as error:
+        print(f"Error al obtener el PDF del reporte: {error}")
         return [None, "Error interno del servidor"]
 
 

@@ -1,4 +1,5 @@
 from fastapi import Depends, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
@@ -9,6 +10,7 @@ from services.reporte_service import (
     crear_reporte_service,
     listar_reportes_service,
     get_reporte_service,
+    get_pdf_reporte_service,
     actualizar_estado_service,
     eliminar_reporte_service,
     contar_reportes_service,
@@ -78,6 +80,21 @@ async def get_reporte(
         if error:
             return handle_error_client(404, error)
         return handle_success(200, "Reporte encontrado", reporte)
+    except Exception as error:
+        return handle_error_server(500, str(error))
+
+
+async def get_pdf_reporte(
+    reporte_id: int,
+    current_user: User = Depends(authenticate_jwt),
+    db: Session = Depends(get_db),
+):
+    """PDF del informe para la app: va con Bearer, así que no necesita URL firmada."""
+    try:
+        ruta, error = await get_pdf_reporte_service(db, current_user.id, reporte_id)
+        if error:
+            return handle_error_client(404, error)
+        return FileResponse(ruta, media_type="application/pdf", filename=f"informe_{reporte_id}.pdf")
     except Exception as error:
         return handle_error_server(500, str(error))
 
