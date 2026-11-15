@@ -3,6 +3,9 @@ import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import "tabulator-tables/dist/css/tabulator.min.css";
 import '@styles/table.css';
 
+// Pasa a minúsculas y quita tildes para que "benjamin" encuentre "Benjamín"
+const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 function useTable({ data, columns, filter, dataToFilter, initialSortName, onSelectionChange, selectable = false }) {
   const tableRef = useRef(null);
   const [table, setTable] = useState(null);
@@ -57,7 +60,10 @@ function useTable({ data, columns, filter, dataToFilter, initialSortName, onSele
     useEffect(() => {
         if (table && isTableBuilt) {
             if (filter) {
-                table.setFilter(dataToFilter, "like", filter);
+                // dataToFilter puede ser un campo o una lista: basta que coincida cualquiera
+                const campos = Array.isArray(dataToFilter) ? dataToFilter : [dataToFilter];
+                const buscado = normalizar(filter);
+                table.setFilter((fila) => campos.some((campo) => normalizar(fila[campo]).includes(buscado)));
             } else {
                 table.clearFilter();
             }

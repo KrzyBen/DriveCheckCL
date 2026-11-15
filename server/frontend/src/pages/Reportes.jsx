@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Table from '@components/Table';
 import Search from '@components/Search';
@@ -7,6 +7,8 @@ import useDeleteReporte from '@hooks/reportes/useDeleteReporte.jsx';
 import { iconEye, iconTrash } from '@helpers/icons.js';
 
 const DIAS_MINIMOS = 60;
+// Constante fuera del componente: un arreglo nuevo en cada render volvería a disparar el filtro
+const CAMPOS_BUSQUEDA = ['usuario_nombre', 'titulo', 'id'];
 
 const stateLabels = { enviado: 'Enviado', recibido: 'Recibido', analizando: 'Analizando', aprobado: 'Aprobado', rechazado: 'Rechazado' };
 const badgeClass = { enviado: 'badge-neutral', recibido: 'badge-neutral', analizando: 'badge-blue badge-live', aprobado: 'badge-green', rechazado: 'badge-red' };
@@ -24,13 +26,16 @@ const Reportes = () => {
   const { reportes, filtros, setFiltros, fetchReportes } = useReportes(usuarioId ? { usuario_id: usuarioId } : {});
   const { handleDelete } = useDeleteReporte(fetchReportes);
   const navigate = useNavigate();
+  // Búsqueda en el navegador; se suma a los filtros de estado y usuario_id del servidor
+  const [search, setSearch] = useState('');
 
   const columns = useMemo(() => [
     // `responsive: 0` = la columna nunca se oculta en el modo collapse (móvil): ID y Acciones
     // siempre visibles para poder abrir un reporte; el resto baja a la lista de detalle.
     // El estilo va por cssClass y no por formatter: 'titulo' lo escribe el conductor
     // y un formatter lo insertaría como HTML sin escapar.
-    { title: 'ID', field: 'id', widthGrow: 1, minWidth: 80, responsive: 0, cssClass: 'cell-id', formatter: (cell) => `#${cell.getValue()}` },
+    // sorter explícito: la tabla se crea vacía y Tabulator adivinaría "string" (1, 10, 2…)
+    { title: 'ID', field: 'id', sorter: 'number', widthGrow: 1, minWidth: 80, responsive: 0, cssClass: 'cell-id', formatter: (cell) => `#${cell.getValue()}` },
     { title: 'Título', field: 'titulo', widthGrow: 3, minWidth: 220, responsive: 1, cssClass: 'cell-title' },
     { title: 'Usuario', field: 'usuario_nombre', widthGrow: 2, minWidth: 150, responsive: 4 },
     {
@@ -73,7 +78,7 @@ const Reportes = () => {
         </div>
         <div className="page-actions">
           <div style={{ width: 260 }}>
-            <Search value="" onChange={() => {}} placeholder="Buscar por usuario" disabled />
+            <Search value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por conductor, título o ID" />
           </div>
           <select
             aria-label="Filtrar por estado"
@@ -91,7 +96,7 @@ const Reportes = () => {
         </div>
       </div>
 
-      <Table data={reportes} columns={columns} initialSortName="id" />
+      <Table data={reportes} columns={columns} filter={search} dataToFilter={CAMPOS_BUSQUEDA} initialSortName="id" />
     </div>
   );
 };
