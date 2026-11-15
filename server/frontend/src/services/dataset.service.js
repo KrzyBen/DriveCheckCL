@@ -39,9 +39,23 @@ export async function restablecerClipDataset(videoId) {
   }
 }
 
+// Lanza la exportación en segundo plano: el servidor responde 202 con el estado inicial
+// (o 409 si ya hay una en curso). `codigo` lleva el status HTTP para distinguir ese caso.
 export async function exportarDataset() {
   try {
     const response = await axios.post('/admin/dataset/exportar');
+    return { ...response.data, codigo: response.status };
+  } catch (error) {
+    if (!error.response) return SIN_CONEXION;
+    return { ...error.response.data, codigo: error.response.status };
+  }
+}
+
+// { estado: 'inactivo'|'en_curso'|'terminado'|'error', clip_actual, total, omitidos,
+//   resumen, error: { motivo, mensaje }, iniciado_en, terminado_en }
+export async function getEstadoExportacion() {
+  try {
+    const response = await axios.get('/admin/dataset/exportar/estado');
     return response.data;
   } catch (error) {
     return error.response?.data ?? SIN_CONEXION;

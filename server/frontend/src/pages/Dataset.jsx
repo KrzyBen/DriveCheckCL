@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Download, RefreshCw } from 'lucide-react';
 import Table from '@components/Table';
 import ClipEtiquetasPopup from '@components/ClipEtiquetasPopup';
-import useDataset from '@hooks/dataset/useDataset.jsx';
+import useDataset, { textoMotivoError, textoMotivoOmision } from '@hooks/dataset/useDataset.jsx';
 import { iconEye, iconPencil } from '@helpers/icons.js';
 import '@styles/dataset.css';
 
@@ -40,12 +40,60 @@ function Tarjeta({ titulo, valor, sub }) {
   );
 }
 
+// Progreso de la exportación en curso: "clip N de M" y omitidos hasta ahora
+function AvisoExportando({ exportacion }) {
+  const { clip_actual: actual, total, omitidos } = exportacion;
+  return (
+    <div className="ds-notice ds-notice--info" role="status" aria-live="polite">
+      <span>
+        <strong>Generando dataset: </strong>
+        {total > 0 ? `anonimizando clip ${actual} de ${total}` : 'preparando los clips'}
+        {omitidos > 0 && ` · ${omitidos} omitido${omitidos === 1 ? '' : 's'} hasta ahora`}
+        . Puede tardar varios minutos; puedes seguir usando el panel.
+      </span>
+      {total > 0 && <progress max={total} value={Math.max(0, actual - 1)} aria-label="Clips anonimizados" />}
+    </div>
+  );
+}
+
+// Resultado de la última exportación de este servidor: error con su motivo u omitidos
+function AvisoUltimaExportacion({ exportacion }) {
+  if (exportacion.estado === 'error') {
+    return (
+      <div className="ds-notice ds-notice--error" role="alert">
+        <span>
+          <strong>La exportación del {fechaHora(exportacion.terminado_en)} no se completó. </strong>
+          {textoMotivoError(exportacion.error)}
+        </span>
+      </div>
+    );
+  }
+  const omitidos = exportacion.estado === 'terminado' ? exportacion.resumen?.omitidos : null;
+  if (!omitidos?.total) return null;
+  return (
+    <div className="ds-notice ds-notice--warn">
+      <div>
+        <strong>
+          La exportación del {fechaHora(exportacion.terminado_en)} omitió {omitidos.total}{' '}
+          clip{omitidos.total === 1 ? '' : 's'} que no se pudieron anonimizar (no forman parte del dataset):
+        </strong>
+        <ul>
+          {(omitidos.clips || []).map((o) => (
+            <li key={o.clip_id}>{o.clip_id}: {textoMotivoOmision(o.motivo)}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 const Dataset = () => {
   const navigate = useNavigate();
   const {
-    resumen, clips, catalogo, loading, error, generando, descargando, guardando,
+    resumen, clips, catalogo, loading, error, generando, exportacion, descargando, guardando,
     cargar, generar, descargar, editar, restablecer,
   } = useDataset();
+  const enCurso = exportacion?.estado === 'en_curso';
   const [clipEditando, setClipEditando] = useState(null);
 
   const columns = useMemo(() => [
@@ -122,12 +170,18 @@ const Dataset = () => {
           <button className="btn" onClick={descargar} disabled={!dataset?.generado || descargando}>
             <Download size={16} /> {descargando ? 'Descargando...' : 'Descargar'}
           </button>
+          {/* Deshabilitado mientras la exportación está en curso: evita el doble clic */}
           <button className="btn btn-primary" onClick={generar} disabled={generando || !resumen}>
-            <RefreshCw size={16} /> {generando ? 'Generando...' : 'Generar dataset'}
+            <RefreshCw size={16} />{' '}
+            {enCurso && exportacion.total > 0
+              ? `Generando... (${exportacion.clip_actual}/${exportacion.total})`
+              : generando ? 'Generando...' : 'Generar dataset'}
           </button>
         </div>
       </div>
 
+      {enCurso && <AvisoExportando exportacion={exportacion} />}
+      {exportacion && !enCurso && <AvisoUltimaExportacion exportacion={exportacion} />}
       {error && (
         <div className="ds-notice ds-notice--error" role="alert">
           <span>{error}</span>
@@ -143,7 +197,7 @@ const Dataset = () => {
       )}
       {dataset?.clips > 0 && dataset.sin_anonimizar > 0 && (
         <div className="ds-notice ds-notice--info">
-          El dataset incluye solo metadatos y etiquetas: los videos se agregan cuando exista el paso de anonimización.
+          El dataset actual se generó sin videos (solo metadatos y etiquetas). Vuelve a generarlo para incluir los videos anonimizados.
         </div>
       )}
 
