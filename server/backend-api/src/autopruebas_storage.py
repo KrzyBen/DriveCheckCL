@@ -1,7 +1,8 @@
 """
 Autopruebas de las URLs firmadas de storage/ (helpers/url_firmada_helper.py), del serializador
-de reportes y de cómo responde /storage (StorageFiles) con peticiones Range. No usan la base de
-datos: los reportes son objetos falsos y /storage se monta sobre un storage temporal.
+de reportes y de cómo responde /storage (StorageFiles): exige la firma, bloquea el dataset y
+atiende peticiones Range. No usan la base de datos: los reportes son objetos falsos y /storage
+se monta sobre un storage temporal.
 
 Uso (desde el contenedor de backend-api, en src/):
     python autopruebas_storage.py
@@ -9,6 +10,7 @@ Uso (desde el contenedor de backend-api, en src/):
 import os
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -137,9 +139,12 @@ def pruebas_serializador():
 # ── /storage con Range ─────────────────────────────────────────────────────
 
 def pruebas_http(storage):
-    print("== 7. /storage: Range y carpetas privadas ==")
+    print("== 7. /storage: URL válida y Range ==")
     contenido = bytes(range(256)) * 40  # 10.240 bytes
-    for ruta, datos in ((RUTA, contenido), ("dataset/README.md", b"privado")):
+    otro_video = "usuario_1/reporte_2/video_2.mp4"
+    metadatos = "usuario_1/reporte_2/video_1.json"
+    for ruta, datos in ((RUTA, contenido), (otro_video, b"otro"), (metadatos, b"{}"),
+                        ("dataset/README.md", b"privado")):
         absoluta = os.path.join(storage, ruta)
         os.makedirs(os.path.dirname(absoluta), exist_ok=True)
         with open(absoluta, "wb") as archivo:
@@ -160,12 +165,46 @@ def pruebas_http(storage):
     comprobar(r.status_code == 206 and r.content == contenido[5000:5010], "rango intermedio (buscar posición) -> 206")
     r = cliente.get(url, headers={"Range": "bytes=-10"})
     comprobar(r.status_code == 206 and r.content == contenido[-10:], "últimos 10 bytes (bytes=-10) -> 206")
-    comprobar(cliente.get("/storage/dataset/README.md").status_code == 404
-              and cliente.get("/storage/usuario_1/../dataset/README.md").status_code == 404,
-              "dataset sigue en 404, también con '..'")
-    # Estado del paso 1: todavía no se exige la firma. El paso 5 cambia esto a 403.
-    comprobar(cliente.get(f"/storage/{RUTA}").status_code == 200,
-              "sin firma todavía responde 200 (se exigirá en el paso 5)")
+    comprobar(cliente.head(url).status_code == 200, "HEAD con URL válida -> 200")
+
+    print("== 8. /storage exige la firma ==")
+    _, exp, sig = partes(url)
+
+    def estado(ruta_url, **kwargs):
+        return cliente.get(ruta_url, **kwargs).status_code
+
+    comprobar(estado(f"/storage/{RUTA}") == 403, "sin firma -> 403")
+    comprobar(cliente.head(f"/storage/{RUTA}").status_code == 403, "HEAD sin firma -> 403")
+    comprobar(estado(f"/storage/{RUTA}", headers={"Range": "bytes=0-99"}) == 403, "Range sin firma -> 403")
+    comprobar(estado(f"/storage/{RUTA}?exp={exp}") == 403 and estado(f"/storage/{RUTA}?sig={sig}") == 403,
+              "solo exp o solo sig -> 403")
+    comprobar(estado(f"/storage/{RUTA}?exp={exp}&sig=firmainventada") == 403, "firma inventada -> 403")
+    comprobar(estado(f"/storage/{RUTA}?exp={int(exp) + 1}&sig={sig}") == 403, "exp alterado -> 403")
+    _, exp_otro, sig_otro = partes(uf.url_firmada(otro_video))
+    comprobar(estado(f"/storage/{RUTA}?exp={exp_otro}&sig={sig_otro}") == 403,
+              "firma de otro archivo aplicada a esta ruta -> 403")
+    # El servidor compara con el reloj real (T es un instante fijo del futuro): se firma
+    # "hace" más que la vigencia máxima, así que ya venció
+    vencida = uf.url_firmada(RUTA, ahora=time.time() - uf.DURACION_S - uf.TRAMO_S - 60)
+    comprobar(estado(vencida) == 403, "URL vencida -> 403")
+    comprobar(estado(f"/storage/{RUTA}?exp={exp}&exp={exp}&sig={sig}") == 403, "parámetro repetido -> 403")
+    comprobar(estado(f"/storage/{metadatos}") == 403, "video_N.json sin firma -> 403")
+    comprobar(estado("/storage/usuario_1/reporte_2/no_existe.mp4") == 403,
+              "archivo inexistente sin firma -> 403 (no revela si existe)")
+    comprobar(estado(uf.url_firmada("usuario_1/reporte_2/no_existe.mp4")) == 404,
+              "archivo inexistente con firma válida -> 404")
+    comprobar(estado("/storage/") == 403 and estado("/storage/usuario_1") == 403, "carpetas sin firma -> 403")
+    # httpx normaliza "../" antes de enviarlo; "%2e%2e" llega al servidor como ".."
+    comprobar(estado(f"/storage/usuario_1/x/%2e%2e/reporte_2/video_1.mp4?exp={exp}&sig={sig}") == 403,
+              "'..' en la ruta -> 403 aunque, normalizada, la firma sea válida")
+
+    print("== 9. Carpetas privadas: 404 antes de mirar la firma ==")
+    exp_dataset = str(T * 2)
+    sig_dataset = uf._firma("dataset/README.md", int(exp_dataset))  # firma hecha a mano con la clave real
+    for ruta_url in ("/storage/dataset/README.md", f"/storage/dataset/README.md?exp={exp_dataset}&sig={sig_dataset}",
+                     "/storage/usuario_1/%2e%2e/dataset/README.md", "/storage/%64ataset/README.md",
+                     "/storage//dataset/README.md", "/storage/./dataset/README.md", "/storage/dataset"):
+        comprobar(estado(ruta_url) == 404, f"{ruta_url.split('?')[0]}{' (con firma)' if '?' in ruta_url else ''} -> 404")
 
 
 def main():
